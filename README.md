@@ -186,11 +186,6 @@ The general format is:
 | `fix!`   | Fix a bug (breaking change)             |
 | `fix`    | Fix a bug                               |
 | `chore`  | Maintenance tasks (no production code)  |
-| `docs`   | Documentation only changes              |
-| `refactor` | Code refactoring without behavior change |
-| `test`   | Adding or updating tests                |
-| `ci`     | Changes to CI/CD config                 |
-| `perf`   | Performance improvements                |
 
 #### Examples
 
