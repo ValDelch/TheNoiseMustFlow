@@ -57,24 +57,55 @@ This project aims to make generative diffusion approachable and powerful, offeri
 
 ---
 
-## 🗺️ Roadmap
-
-- [ ] Implement DDPM
-    - [ ] For inference
-    - [ ] For training
-- [ ] Implement a dashboard
-    - [ ] For inference
-    - [ ] For training
-
----
-
 ## 🔧 Built With
 
-* [![Python][Python]][Python-url]
-* [![Pytorch][PyTorch]][PyTorch-url]
+[![Python][Python]][Python-url]
+[![Pytorch][PyTorch]][PyTorch-url]
 <!--
 * [![Vue][Vue.js]][Vue-url]
 -->
+
+---
+
+## 🗺️ Roadmap
+
+### 📦 Core Features
+- [x] Project setup and repo structure
+- [ ] Implement basic DDPM architecture
+  - [ ] Forward process (noise scheduling)
+  - [ ] Reverse sampling
+  - [ ] Loss functions
+- [ ] Add beta-schedule variants (linear, cosine, etc.)
+- [ ] DDIM sampling
+- [ ] Improve support for multi-resolution outputs
+- [ ] Add support for conditional diffusion (class labels, images, etc.)
+
+### 🧪 Training & Evaluation
+- [ ] Training loop with logging
+- [ ] Metrics: loss, FID, PSNR (optionally)
+- [ ] Checkpointing & resume
+- [ ] Support for distributed training
+- [ ] Add pretrained model zoo
+
+### 🎨 Visualization
+- [ ] Save sampled images during training
+- [ ] Animate denoising steps
+- [ ] Plot noise schedule and beta curves
+- [ ] TensorBoard support
+
+### 🧰 Developer Experience
+- [ ] Modular code with config files
+- [ ] CLI to run training and sampling
+- [ ] Documentation with usage examples
+
+### 🎛️ User Interfaces
+- [ ] Interface for sampling
+- [ ] Web-based demo / notebook
+
+### 🌐 Educational Material
+- [ ] High-level explanation in README
+- [ ] Notebooks: DDPM math & intuition
+- [ ] Tutorials: build your own DDPM from scratch
 
 ---
 
