@@ -2,7 +2,7 @@ name: Bump Version and Tag
 
 on:
   workflow_run:
-    workflows: ["tests"]
+    workflows: ["Tests"]
     branches: [main]
     types:
       - completed
