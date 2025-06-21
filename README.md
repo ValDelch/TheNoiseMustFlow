@@ -194,6 +194,25 @@ git commit -m "feat(trainer): add early stopping"
 git commit -m "fix(core): handle NaNs in beta schedule"
 ```
 
+For the branch name, we recommend using the format:
+
+```
+feature/<description>
+```
+for adding new features, or
+
+```
+fix/<description>
+```
+for bug fixes, or finally
+
+```
+chore/<description>
+```
+for maintenance tasks.
+
+---
+
 ## 👥 Top Contributors
 
 <a href="https://github.com/ValDelch/TheNoiseMustFlow/graphs/contributors">
