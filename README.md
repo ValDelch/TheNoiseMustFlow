@@ -8,9 +8,7 @@
 [![Issues][issues-shield]][issues-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 
-<!-- 
-![Test Status](https://github.com/ValDelch/DL4Photonics/actions/workflows/tests.yml/badge.svg)
--->
+![Test Status](https://github.com/ValDelch/TheNoiseMustFlow/actions/workflows/tests.yml/badge.svg)
 
 <!-- PROJECT LOGO -->
 <br />
