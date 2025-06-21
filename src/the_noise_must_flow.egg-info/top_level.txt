@@ -1,6 +1,0 @@
-core
-scripts
-tests
-trainer
-ui
-utils

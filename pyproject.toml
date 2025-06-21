@@ -9,7 +9,7 @@ description = "A toolkit for understanding, training, and visualizing diffusion 
 authors = [
     { name = "Valentin Delchevalerie", email = "vdelchevalerie@gmail.com" }
 ]
-license = { file = "LICENSE" }
+license = "Apache-2.0"
 readme = "README.md"
 requires-python = ">=3.12"
 
