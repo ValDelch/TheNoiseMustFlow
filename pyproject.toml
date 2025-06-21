@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "the-noise-must-flow"
+version = "0.1.0"
+description = "A toolkit for understanding, training, and visualizing diffusion models."
+authors = [
+    { name = "Valentin Delchevalerie", email = "vdelchevalerie@gmail.com" }
+]
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "torch>=2.6.0",
+    "pytest",
+    "commitizen"
+]
+
+[project.urls]
+Homepage = "https://github.com/ValDelch/TheNoiseMustFlow"
+Repository = "https://github.com/ValDelch/TheNoiseMustFlow"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+tag_format = "v$version"
+major_version_zero = false

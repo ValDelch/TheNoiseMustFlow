@@ -8,9 +8,7 @@
 [![Issues][issues-shield]][issues-url]
 [![LinkedIn][linkedin-shield]][linkedin-url]
 
-<!-- 
-![Test Status](https://github.com/ValDelch/DL4Photonics/actions/workflows/tests.yml/badge.svg)
--->
+![Test Status](https://github.com/ValDelch/TheNoiseMustFlow/actions/workflows/tests.yml/badge.svg)
 
 <!-- PROJECT LOGO -->
 <br />
@@ -115,15 +113,92 @@ This project aims to make generative diffusion approachable and powerful, offeri
 
 ---
 
+## 📂 Project Structure
+
+Here's a quick overview of the main components in this repository:
+
+| Path                      | Description                                                  |
+|---------------------------|--------------------------------------------------------------|
+| `configs/`                | YAML/JSON config files for models and training               |
+| `core/`                   | Core logic for diffusion models and sampling                 |
+| ├── `diffusion.py`        | Forward and reverse diffusion process                        |
+| ├── `models.py`           | U-Net, VAE, or other neural architectures                    |
+| ├── `building_blocks.py`  | Modular building blocks used inside models                   |
+| ├── `sample.py`           | Sampling routines from noise                                 |
+| └── `schedule.py`         | Noise schedule and beta/variance utilities                   |
+| `trainer/`                | Training workflows and evaluation tools                      |
+| ├── `train.py`            | Training loop orchestration                                 |
+| ├── `losses.py`           | Loss functions used during training                          |
+| └── `metrics.py`          | Evaluation metrics like FID, PSNR                            |
+| `ui/`                     | Gradio or web-based interface for interactive demos          |
+| └── `interface.py`        | Script to launch the UI                                      |
+| `utils/`                  | Utility functions                                             |
+| ├── `logger.py`           | Logging, experiment tracking                                 |
+| └── `visualize.py`        | Visual tools for training or generation                      |
+| `scripts/`                | CLI scripts to run training or inference                     |
+| ├── `train_ddpm.py`       | Command-line entry point to train DDPM                       |
+| └── `sample_ddpm.py`      | Command-line entry point to sample from trained model        |
+| `notebooks/`              | Jupyter notebooks for tutorials and mathematical insights    |
+| └── `intro_to_diffusion.ipynb` | Notebook introducing DDPMs                          |
+| `tests/`                  | Unit tests for validating modules                            |
+| `assets/`                 | Diagrams, logos, generated outputs                           |
+| `docs/`                  | Documentation files                                         |
+| `requirements.txt`        | List of Python dependencies                                  |
+| `pyproject.toml`          | Optional packaging/build config                              |
+| `README.md`               | Project description                                          |
+| `LICENSE`                 | Project license                                              |
+
+---
+
 ## 🤝 Contributing
 
 Feel free to contribute to the project. Any contributions you make are **greatly appreciated**.
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+### 🔧 How to Contribute
+
+1. Fork the repository
+2. Create a new branch:  
+   `git checkout -b feature/my-cool-feature`
+3. Make your changes and **use conventional commits** when committing:  
+   `git commit -m "feat(core): add new sampler"`
+4. Push to your fork:  
+   `git push origin feature/my-cool-feature`
+5. Open a pull request to the `main` branch
+
+---
+
+### 📝 Commit Message Format
+
+We follow the **[Conventional Commits](https://www.conventionalcommits.org/)** standard to enable automated versioning and changelog generation.
+
+The general format is:
+
+```
+<type>[optional scope]: <description>
+```
+
+#### Common types (used by Commitizen):
+
+| Type     | Purpose                                 |
+|----------|-----------------------------------------|
+| `feat!`  | Add a new major feature (breaking change) |
+| `feat`   | Add a new feature                       |
+| `fix!`   | Fix a bug (breaking change)             |
+| `fix`    | Fix a bug                               |
+| `chore`  | Maintenance tasks (no production code)  |
+| `docs`   | Documentation only changes              |
+| `refactor` | Code refactoring without behavior change |
+| `test`   | Adding or updating tests                |
+| `ci`     | Changes to CI/CD config                 |
+| `perf`   | Performance improvements                |
+
+#### Examples
+
+```bash
+git commit -m "feat(trainer): add early stopping"
+git commit -m "fix(core): handle NaNs in beta schedule"
+git commit -m "docs: improve README structure"
+```
 
 ## 👥 Top Contributors
 
