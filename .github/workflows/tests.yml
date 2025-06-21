@@ -1,4 +1,4 @@
-name: CI & Version Bump
+name: CI & Version Bump (if needed)
 
 on:
   push:
@@ -53,10 +53,13 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
-      - name: Bump version and create tag
-        run: cz bump --yes --tag-format v$version
+      - name: Bump version and create tag (if needed)
+        continue-on-error: true
+        run: |
+          cz bump --yes --tag-format v$version || echo "No version bump needed."
 
       - name: Push changes and tag
+        if: success()  # runs only if the bump step did update the version
         run: |
           git push origin HEAD:main
           git push --tags

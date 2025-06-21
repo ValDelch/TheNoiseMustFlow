@@ -192,7 +192,6 @@ The general format is:
 ```bash
 git commit -m "feat(trainer): add early stopping"
 git commit -m "fix(core): handle NaNs in beta schedule"
-git commit -m "docs: improve README structure"
 ```
 
 ## 👥 Top Contributors
