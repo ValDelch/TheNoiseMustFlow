@@ -117,36 +117,36 @@ This project aims to make generative diffusion approachable and powerful, offeri
 
 Here's a quick overview of the main components in this repository:
 
-| Path                      | Description                                                  |
-|---------------------------|--------------------------------------------------------------|
-| `configs/`                | YAML/JSON config files for models and training               |
-| `core/`                   | Core logic for diffusion models and sampling                 |
-| ├── `diffusion.py`        | Forward and reverse diffusion process                        |
-| ├── `models.py`           | U-Net, VAE, or other neural architectures                    |
-| ├── `building_blocks.py`  | Modular building blocks used inside models                   |
-| ├── `sample.py`           | Sampling routines from noise                                 |
-| └── `schedule.py`         | Noise schedule and beta/variance utilities                   |
-| `trainer/`                | Training workflows and evaluation tools                      |
-| ├── `train.py`            | Training loop orchestration                                 |
-| ├── `losses.py`           | Loss functions used during training                          |
-| └── `metrics.py`          | Evaluation metrics like FID, PSNR                            |
-| `ui/`                     | Gradio or web-based interface for interactive demos          |
-| └── `interface.py`        | Script to launch the UI                                      |
-| `utils/`                  | Utility functions                                             |
-| ├── `logger.py`           | Logging, experiment tracking                                 |
-| └── `visualize.py`        | Visual tools for training or generation                      |
-| `scripts/`                | CLI scripts to run training or inference                     |
-| ├── `train_ddpm.py`       | Command-line entry point to train DDPM                       |
-| └── `sample_ddpm.py`      | Command-line entry point to sample from trained model        |
-| `notebooks/`              | Jupyter notebooks for tutorials and mathematical insights    |
-| └── `intro_to_diffusion.ipynb` | Notebook introducing DDPMs                          |
-| `tests/`                  | Unit tests for validating modules                            |
-| `assets/`                 | Diagrams, logos, generated outputs                           |
-| `docs/`                  | Documentation files                                         |
-| `requirements.txt`        | List of Python dependencies                                  |
-| `pyproject.toml`          | Optional packaging/build config                              |
-| `README.md`               | Project description                                          |
-| `LICENSE`                 | Project license                                              |
+| Path                                  | Description                                                  |
+|---------------------------------------|--------------------------------------------------------------|
+| `assets/`                             | Diagrams, logos, and generated outputs                       |
+| `configs/`                            | YAML/JSON configuration files for models and training        |
+| `docs/`                               | Project documentation and references                         |
+| `notebooks/`                          | Jupyter notebooks for tutorials and mathematical insights    |
+| └── `intro_to_diffusion.ipynb`        | Notebook introducing DDPMs                                   |
+| `src/`                                | Root source folder for all Python modules                    |
+| ├── `core/`                           | Core logic for diffusion models and sampling                 |
+| │   ├── `building_blocks.py`          | Modular building blocks used inside models                   |
+| │   ├── `diffusion.py`                | Forward and reverse diffusion process                        |
+| │   ├── `models.py`                   | U-Net, VAE, or other neural architectures                    |
+| │   ├── `sample.py`                   | Sampling routines from noise                                 |
+| │   └── `schedule.py`                 | Noise schedule and beta/variance utilities                   |
+| ├── `scripts/`                        | CLI scripts to run training or inference                     |
+| │   ├── `sample_ddpm.py`              | Command-line entry point to sample from trained model        |
+| │   └── `train_ddpm.py`               | Command-line entry point to train DDPM                       |
+| ├── `tests/`                          | Unit tests for validating modules                            |
+| ├── `trainer/`                        | Training workflows and evaluation tools                      |
+| │   ├── `losses.py`                   | Loss functions used during training                          |
+| │   ├── `metrics.py`                  | Evaluation metrics like FID, PSNR                            |
+| │   └── `train.py`                    | Training loop orchestration                                  |
+| ├── `ui/`                             | Gradio or web-based interface for interactive demos          |
+| │   └── `interface.py`                | Script to launch the UI                                      |
+| └── `utils/`                          | Utility functions                                             |
+|     ├── `logger.py`                   | Logging, experiment tracking                                 |
+|     └── `visualize.py`                | Visual tools for training or generation                      |
+| `LICENSE`                             | Project license (Apache-2.0)                                 |
+| `README.md`                           | Project overview and usage instructions                      |
+| `pyproject.toml`                      | Build and packaging configuration with project metadata      |
 
 ---
 
