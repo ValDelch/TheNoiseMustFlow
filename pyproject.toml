@@ -14,7 +14,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 
 dependencies = [
-    "torch>=2.6.0",
+    "torch~=2.7.0",
+    "matplotlib",
+    "ipykernel",
     "pytest",
     "commitizen"
 ]
@@ -22,6 +24,12 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/ValDelch/TheNoiseMustFlow"
 Repository = "https://github.com/ValDelch/TheNoiseMustFlow"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
