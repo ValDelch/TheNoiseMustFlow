@@ -79,10 +79,15 @@ class NoiseScheduler:
         Returns:
             The input tensor with added noise.
         """
-        self._validate_t(x, t)
+        self._validate_xt(x, t)
 
         beta = self.betas[t] # (batch_size,) if t is a tensor, else scalar
         noise = torch.randn(x.shape, generator=self.generator) # (batch_size, channels, height, width) or (channels, height, width)
+
+        # Broadcasting beta if necessary
+        if beta.dim() > 0:
+            beta = beta.view(-1, *(1,)*3)  # Expand beta to match x's dimensions
+
         return torch.sqrt(1 - beta) * x + torch.sqrt(beta) * noise
     
     def add_noise_cumulative(self, x: torch.Tensor, t: TensorOrInt) -> torch.Tensor:
@@ -98,10 +103,15 @@ class NoiseScheduler:
         Returns:
             The input tensor with added noise.
         """
-        self._validate_t(x, t)
+        self._validate_xt(x, t)
 
         alphas_cumprod = self.alphas_cumprod[t]  # (batch_size,) if t is a tensor, else scalar
         noise = torch.randn(x.shape, generator=self.generator) # (batch_size, channels, height, width) or (channels, height, width)
+
+        # Broadcasting alphas_cumprod if necessary
+        if alphas_cumprod.dim() > 0:
+            alphas_cumprod = alphas_cumprod.view(-1, *(1,)*3)  # Expand alphas_cumprod to match x's dimensions
+
         return torch.sqrt(alphas_cumprod) * x + torch.sqrt(1 - alphas_cumprod) * noise
     
     def _linear_betas(self, beta_start, beta_end) -> torch.Tensor:
@@ -114,7 +124,7 @@ class NoiseScheduler:
         """
         Generate cosine betas for the noise schedule.
         """
-        t = torch.linspace(0, self.steps, self.steps + 1) / self.steps
+        t = torch.linspace(0, self.steps, self.steps) / self.steps
         alphas_cumprod = torch.cos((t + s) / (1 + s) * (torch.pi / 2)) ** 2
         alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
         betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
@@ -140,15 +150,19 @@ class NoiseScheduler:
         """
         return beta_start * (beta_end / beta_start) ** (torch.arange(self.steps) / (self.steps - 1))
     
-    def _validate_t(self, x: torch.Tensor, t: TensorOrInt):
+    def _validate_xt(self, x: torch.Tensor, t: TensorOrInt):
         """
         Validate the step index or tensor of indices.
         """
+        assert x.dim() in [3, 4], "x must be a 3D or 4D tensor (channels, height, width) or (batch_size, channels, height, width)"
+
         if isinstance(t, torch.Tensor):
             assert t.min() >= 0 and t.max() < self.steps, "t must be in the range [0, steps["
             if t.dim() != 0:
                 assert t.shape[0] == x.shape[0], "Batch size of t must match batch size of x"
         elif isinstance(t, int):
             assert 0 <= t < self.steps, "t must be in the range [0, steps["
+            if x.dim() == 4:
+                print("[Warning] t is an int but x has batch dimension. Assuming a constant t for all samples.")
         else:
             raise TypeError("t must be an int or a torch.Tensor")
