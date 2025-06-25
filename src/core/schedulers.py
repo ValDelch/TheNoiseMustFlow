@@ -20,14 +20,14 @@ import torch
 TensorOrInt = Union[torch.Tensor, int]
 
 
-class NoiseScheduler:
+class NoiseScheduler(torch.nn.Module):
     """
     A non-trainable noise scheduler that adjusts the noise
     variance over a specified number of steps.
     """
 
-    def __init__(self, steps: int=1000, betas: tuple[float, float]=(1e-4, 0.02), 
-                 schedule: str='linear', seed: Optional[int]=None):
+    def __init__(self, steps: int = 1000, betas: tuple[float, float] = (1e-4, 0.02), 
+                 schedule: str = 'linear', seed: Optional[int] = None):
         """
         __init__
 
@@ -66,7 +66,8 @@ class NoiseScheduler:
         if seed is not None:
             self.generator.manual_seed(seed)
 
-    def add_noise_step(self, x: torch.Tensor, t: TensorOrInt) -> torch.Tensor:
+    def add_noise_step(self, x: torch.Tensor, t: TensorOrInt, 
+                       noise: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Add a single step of noise to the input tensor.
 
@@ -75,22 +76,29 @@ class NoiseScheduler:
                (batch_size, channels, height, width) or (channels, height, width)
             t: The step index or tensor of indices. 
                (0 <= t < steps), int or tensor of shape (batch_size,)
+            noise: Optional pre-generated noise tensor. If not provided, noise will be generated internally.
+                   (batch_size, channels, height, width) or (channels, height, width)
 
         Returns:
             The input tensor with added noise.
         """
         self._validate_xt(x, t)
 
+        if noise is not None:
+            assert noise.shape == x.shape, "If noise is provided, it must have the same shape as x"
+        else:
+            noise = torch.randn(x.shape, generator=self.generator)
+
         beta = self.betas[t] # (batch_size,) if t is a tensor, else scalar
-        noise = torch.randn(x.shape, generator=self.generator) # (batch_size, channels, height, width) or (channels, height, width)
 
         # Broadcasting beta if necessary
         if beta.dim() > 0:
             beta = beta.view(-1, *(1,)*3)  # Expand beta to match x's dimensions
 
         return torch.sqrt(1 - beta) * x + torch.sqrt(beta) * noise
-    
-    def add_noise_cumulative(self, x: torch.Tensor, t: TensorOrInt) -> torch.Tensor:
+
+    def add_noise_cumulative(self, x: torch.Tensor, t: TensorOrInt,
+                             noise: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Add noise to the input tensor for multiple steps at once.
 
@@ -99,14 +107,20 @@ class NoiseScheduler:
                (batch_size, channels, height, width) or (channels, height, width)
             t: The step index or tensor of indices. 
                (0 <= t < steps), int or tensor of shape (batch_size,)
+            noise: Optional pre-generated noise tensor. If not provided, noise will be generated internally.
+                   (batch_size, channels, height, width) or (channels, height, width)
 
         Returns:
             The input tensor with added noise.
         """
         self._validate_xt(x, t)
 
+        if noise is not None:
+            assert noise.shape == x.shape, "If noise is provided, it must have the same shape as x"
+        else:
+            noise = torch.randn(x.shape, generator=self.generator)
+
         alphas_cumprod = self.alphas_cumprod[t]  # (batch_size,) if t is a tensor, else scalar
-        noise = torch.randn(x.shape, generator=self.generator) # (batch_size, channels, height, width) or (channels, height, width)
 
         # Broadcasting alphas_cumprod if necessary
         if alphas_cumprod.dim() > 0:
@@ -120,7 +134,7 @@ class NoiseScheduler:
         """
         return torch.linspace(beta_start, beta_end, self.steps)
     
-    def _cosine_betas(self, s: float=0.008) -> tuple[torch.Tensor, torch.Tensor]:
+    def _cosine_betas(self, s: float = 0.008) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Generate cosine betas for the noise schedule.
         """

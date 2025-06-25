@@ -98,3 +98,57 @@ def test_3d_input_with_batch_t_raises():
     t = torch.tensor([1, 2])   # Batched t
     with pytest.raises(AssertionError, match="Batch size of t must match"):
         scheduler.add_noise_step(x, t)
+
+def test_add_noise_step_with_external_noise():
+    scheduler = NoiseScheduler(steps=100, schedule="linear", seed=42)
+    x = torch.ones(3, 32, 32)
+    t = 10
+    noise = torch.randn_like(x)
+    out = scheduler.add_noise_step(x, t, noise=noise)
+    expected = torch.sqrt(1 - scheduler.betas[t]) * x + torch.sqrt(scheduler.betas[t]) * noise
+    assert torch.allclose(out, expected)
+
+def test_add_noise_step_batch_with_external_noise():
+    scheduler = NoiseScheduler(steps=100, schedule="linear", seed=42)
+    x = torch.ones(2, 3, 32, 32)
+    t = torch.tensor([5, 10])
+    noise = torch.randn_like(x)
+    out = scheduler.add_noise_step(x, t, noise=noise)
+    betas = scheduler.betas[t].view(-1, 1, 1, 1)
+    expected = torch.sqrt(1 - betas) * x + torch.sqrt(betas) * noise
+    assert torch.allclose(out, expected)
+
+def test_add_noise_step_wrong_noise_shape_raises():
+    scheduler = NoiseScheduler(steps=100)
+    x = torch.ones(3, 32, 32)
+    t = 10
+    noise = torch.randn(1, 3, 32, 32)  # mismatched shape
+    with pytest.raises(AssertionError, match="must have the same shape"):
+        scheduler.add_noise_step(x, t, noise=noise)
+
+def test_add_noise_cumulative_with_external_noise():
+    scheduler = NoiseScheduler(steps=100, schedule="linear", seed=42)
+    x = torch.ones(3, 32, 32)
+    t = 10
+    noise = torch.randn_like(x)
+    out = scheduler.add_noise_cumulative(x, t, noise=noise)
+    expected = torch.sqrt(scheduler.alphas_cumprod[t]) * x + torch.sqrt(1 - scheduler.alphas_cumprod[t]) * noise
+    assert torch.allclose(out, expected)
+
+def test_add_noise_cumulative_batch_with_external_noise():
+    scheduler = NoiseScheduler(steps=100, schedule="linear", seed=42)
+    x = torch.ones(2, 3, 32, 32)
+    t = torch.tensor([10, 20])
+    noise = torch.randn_like(x)
+    alphas = scheduler.alphas_cumprod[t].view(-1, 1, 1, 1)
+    expected = torch.sqrt(alphas) * x + torch.sqrt(1 - alphas) * noise
+    out = scheduler.add_noise_cumulative(x, t, noise=noise)
+    assert torch.allclose(out, expected)
+
+def test_add_noise_cumulative_wrong_noise_shape_raises():
+    scheduler = NoiseScheduler(steps=100)
+    x = torch.ones(3, 32, 32)
+    t = 10
+    noise = torch.randn(1, 3, 32, 32)
+    with pytest.raises(AssertionError, match="must have the same shape"):
+        scheduler.add_noise_cumulative(x, t, noise=noise)
