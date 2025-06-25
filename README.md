@@ -70,7 +70,7 @@ This project aims to make generative diffusion approachable and powerful, offeri
 ### 📦 Core Features
 - [x] Project setup and repo structure
 - [ ] Implement basic DDPM architecture
-  - [ ] Forward process (noise scheduling)
+  - [x] Forward process (noise scheduling)
   - [ ] Reverse sampling
   - [ ] Loss functions
 - [ ] Add beta-schedule variants (linear, cosine, etc.)
@@ -109,7 +109,31 @@ This project aims to make generative diffusion approachable and powerful, offeri
 
 ## 🔧 Installation
 
-⏳ Coming soon
+To install the project and start experimenting with diffusion models, follow these steps:
+
+1. **Clone the repository**:
+  ```bash
+  git clone https://github.com/ValDelch/TheNoiseMustFlow
+  cd TheNoiseMustFlow
+  ```
+2. **Create a virtual environment** (optional but recommended):
+  ```bash
+  python3 -m venv .venv
+  ```
+3. **Activate the virtual environment**:
+  ```bash
+  source .venv/bin/activate
+  ```
+4. **Install the required packages and the project**:
+  ```bash
+  pip install -e .
+  ```
+
+The different components of the project will be installed along with their dependencies. After that, you can start using the different components of the project, e.g.,
+```python
+from core.schedulers import LinearNoiseScheduler
+scheduler = LinearNoiseScheduler()
+```
 
 ---
 
@@ -123,14 +147,14 @@ Here's a quick overview of the main components in this repository:
 | `configs/`                            | YAML/JSON configuration files for models and training        |
 | `docs/`                               | Project documentation and references                         |
 | `notebooks/`                          | Jupyter notebooks for tutorials and mathematical insights    |
-| └── `intro_to_diffusion.ipynb`        | Notebook introducing DDPMs                                   |
+| └── `__a__Noise_Schedulers.ipynb`     | Notebook introducing the Noise Schedulers                    |
 | `src/`                                | Root source folder for all Python modules                    |
 | ├── `core/`                           | Core logic for diffusion models and sampling                 |
 | │   ├── `building_blocks.py`          | Modular building blocks used inside models                   |
 | │   ├── `diffusion.py`                | Forward and reverse diffusion process                        |
 | │   ├── `models.py`                   | U-Net, VAE, or other neural architectures                    |
-| │   ├── `sample.py`                   | Sampling routines from noise                                 |
-| │   └── `schedule.py`                 | Noise schedule and beta/variance utilities                   |
+| │   ├── `samplers.py`                 | Sampling routines from noise                                 |
+| │   └── `schedulers.py`               | Noise schedule and beta/variance utilities                   |
 | ├── `scripts/`                        | CLI scripts to run training or inference                     |
 | │   ├── `sample_ddpm.py`              | Command-line entry point to sample from trained model        |
 | │   └── `train_ddpm.py`               | Command-line entry point to train DDPM                       |
@@ -245,7 +269,7 @@ This project is based on many different resources. Here is a list of some of the
 
 [Python]: https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python&logoColor=white
 [Python-url]: https://www.python.org/
-[PyTorch]: https://img.shields.io/badge/PyTorch-2.6.0-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white
+[PyTorch]: https://img.shields.io/badge/PyTorch-2.7.0-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white
 [PyTorch-url]: https://pytorch.org/
 [Vue.js]: https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D
 [Vue-url]: https://vuejs.org/
