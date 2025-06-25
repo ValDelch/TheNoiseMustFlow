@@ -17,8 +17,6 @@
     <img src="https://github.com/user-attachments/assets/3c8b4fc8-7d13-4788-9ca9-ad8a12856087" alt="Logo" width="256" height="256">
   </a>
 
-  <h3 align="center">The Noise Must Flow</h3>
-
   <p align="center">
     A creative lab for building, training, and understanding diffusion models.<br>
     Learn the flow of noise. Generate beauty from randomness.
