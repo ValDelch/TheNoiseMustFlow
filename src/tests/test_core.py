@@ -8,6 +8,7 @@ import torch
 #
 
 from core.schedulers import NoiseScheduler
+from core.samplers import DDPMSampler, DDIMSampler
 
 @pytest.mark.parametrize("schedule", ["linear", "cosine", "quadratic", "sigmoid", "geometric"])
 def test_scheduler_init_valid(schedule):
@@ -152,3 +153,85 @@ def test_add_noise_cumulative_wrong_noise_shape_raises():
     noise = torch.randn(1, 3, 32, 32)
     with pytest.raises(AssertionError, match="must have the same shape"):
         scheduler.add_noise_cumulative(x, t, noise=noise)
+
+def test_linear_noise_one_image_full_process():
+    scheduler = NoiseScheduler(steps=10, schedule="linear", seed=42)
+    x = torch.ones(3, 32, 32)
+    for i in range(scheduler.steps):
+        x = scheduler.add_noise_step(x, i)
+    
+def test_cosine_noise_one_image_full_process():
+    scheduler = NoiseScheduler(steps=10, schedule="cosine", seed=42)
+    x = torch.ones(3, 32, 32)
+    for i in range(scheduler.steps):
+        x = scheduler.add_noise_step(x, i)
+
+#
+# Tests for the samplers
+#
+
+@pytest.fixture
+def scheduler():
+    return NoiseScheduler(steps=100, betas=(1e-4, 0.02), schedule="linear", seed=123)
+
+@pytest.fixture
+def image():
+    return torch.ones(3, 32, 32)
+
+@pytest.fixture
+def batch_image():
+    return torch.ones(2, 3, 32, 32)
+
+@pytest.fixture
+def dummy_pred_noise():
+    return lambda x, t: torch.zeros_like(x)
+
+def test_ddpm_sample_prev_step_shape(scheduler, image):
+    sampler = DDPMSampler(scheduler)
+    noise = torch.randn_like(image)
+    out = sampler.sample_prev_step(image, t=10, pred_noise=noise)
+    assert out.shape == image.shape
+
+def test_ddpm_sample_final_output_shape(scheduler, image, dummy_pred_noise):
+    sampler = DDPMSampler(scheduler)
+    out = sampler.sample(image.clone(), dummy_pred_noise, t=10, return_intermediates=False)
+    assert out.shape == image.shape
+
+def test_ddpm_sample_from_start(scheduler, image, dummy_pred_noise):
+    sampler = DDPMSampler(scheduler)
+    out = sampler.sample(image.clone(), dummy_pred_noise, return_intermediates=False)
+    assert out.shape == image.shape
+
+def test_ddpm_sample_returns_intermediates(scheduler, image, dummy_pred_noise):
+    sampler = DDPMSampler(scheduler)
+    result = sampler.sample(image.clone(), dummy_pred_noise, t=10, return_intermediates=True, return_step=2)
+    assert isinstance(result, list)
+    for r in result:
+        assert r.shape == image.shape
+
+def test_ddim_sample_prev_step_shape(scheduler, image):
+    sampler = DDIMSampler(scheduler, steps=10, eta=0.0)
+    noise = torch.randn_like(image)
+    out = sampler.sample_prev_step(image, t=5, pred_noise=noise)
+    assert out.shape == image.shape
+
+def test_ddim_sample_final_output_shape(scheduler, image, dummy_pred_noise):
+    sampler = DDIMSampler(scheduler, steps=10, eta=0.0)
+    out = sampler.sample(image.clone(), dummy_pred_noise, t=9)
+    assert out.shape == image.shape
+
+def test_ddim_sample_from_start(scheduler, image, dummy_pred_noise):
+    sampler = DDIMSampler(scheduler, steps=10, eta=0.0)
+    out = sampler.sample(image.clone(), dummy_pred_noise, return_intermediates=False)
+    assert out.shape == image.shape
+
+def test_ddim_sample_returns_intermediates(scheduler, image, dummy_pred_noise):
+    sampler = DDIMSampler(scheduler, steps=10)
+    result = sampler.sample(image.clone(), dummy_pred_noise, t=9, return_intermediates=True, return_step=2)
+    assert isinstance(result, list)
+    for r in result:
+        assert r.shape == image.shape
+
+def test_ddim_invalid_step_divisor():
+    with pytest.raises(AssertionError, match="steps must be a divisor"):
+        DDIMSampler(NoiseScheduler(steps=100), steps=33)

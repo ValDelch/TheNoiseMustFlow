@@ -38,7 +38,7 @@ class NoiseScheduler(torch.nn.Module):
             steps: The number of steps for the scheduler.
             betas: A tuple containing the minimum and maximum beta values.
             schedule: The type of noise schedule to use. Available options are
-                      'linear', 'cosine', 'quadratic', 'sigmoid' and 'geometric'.
+                'linear', 'cosine', 'quadratic', 'sigmoid' and 'geometric'.
             seed: Optional seed for reproducibility.
         """
         super(NoiseScheduler, self).__init__()
@@ -57,10 +57,16 @@ class NoiseScheduler(torch.nn.Module):
             self.betas = getattr(self, f"_{schedule}_betas")(betas[0], betas[1])
 
             # Compute the cumulative product of alphas for cumulative noise addition
-            alphas = 1 - self.betas
-            self.alphas_cumprod = torch.cumprod(alphas, dim=0)
+            self.alphas = 1 - self.betas
+            self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
         else:
             self.betas, self.alphas_cumprod = self._cosine_betas()
+
+            # Artificially recompute the alphas, since they are generally
+            # not directly used in the cosine schedule
+            self.alphas = torch.zeros_like(self.alphas_cumprod)
+            self.alphas[0] = self.alphas_cumprod[0]
+            self.alphas[1:] = self.alphas_cumprod[1:] / self.alphas_cumprod[:-1]
 
         self.generator = torch.Generator()
         if seed is not None:
@@ -73,11 +79,11 @@ class NoiseScheduler(torch.nn.Module):
 
         Args:
             x: The input tensor to which noise will be added.
-               (batch_size, channels, height, width) or (channels, height, width)
+                (batch_size, channels, height, width) or (channels, height, width)
             t: The step index or tensor of indices. 
-               (0 <= t < steps), int or tensor of shape (batch_size,)
+                (0 <= t < steps), int or tensor of shape (batch_size,)
             noise: Optional pre-generated noise tensor. If not provided, noise will be generated internally.
-                   (batch_size, channels, height, width) or (channels, height, width)
+                (batch_size, channels, height, width) or (channels, height, width)
 
         Returns:
             The input tensor with added noise.
@@ -104,11 +110,11 @@ class NoiseScheduler(torch.nn.Module):
 
         Args:
             x: The input tensor to which noise will be added.
-               (batch_size, channels, height, width) or (channels, height, width)
+                (batch_size, channels, height, width) or (channels, height, width)
             t: The step index or tensor of indices. 
-               (0 <= t < steps), int or tensor of shape (batch_size,)
+                (0 <= t < steps), int or tensor of shape (batch_size,)
             noise: Optional pre-generated noise tensor. If not provided, noise will be generated internally.
-                   (batch_size, channels, height, width) or (channels, height, width)
+                (batch_size, channels, height, width) or (channels, height, width)
 
         Returns:
             The input tensor with added noise.
@@ -138,11 +144,11 @@ class NoiseScheduler(torch.nn.Module):
         """
         Generate cosine betas for the noise schedule.
         """
-        t = torch.linspace(0, self.steps, self.steps) / self.steps
+        t = torch.linspace(0, self.steps, self.steps + 1) / self.steps
         alphas_cumprod = torch.cos((t + s) / (1 + s) * (torch.pi / 2)) ** 2
         alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
         betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
-        return torch.clip(betas, min=0, max=0.999), alphas_cumprod
+        return torch.clip(betas, min=0, max=0.999), alphas_cumprod[:-1]
 
     def _quadratic_betas(self, beta_start, beta_end) -> torch.Tensor:
         """
@@ -174,6 +180,8 @@ class NoiseScheduler(torch.nn.Module):
             assert t.min() >= 0 and t.max() < self.steps, "t must be in the range [0, steps["
             if t.dim() != 0:
                 assert t.shape[0] == x.shape[0], "Batch size of t must match batch size of x"
+            elif x.dim() == 4:
+                print("[Warning] t is a single integer but x has batch dimension. Assuming a constant t for all samples.")
         elif isinstance(t, int):
             assert 0 <= t < self.steps, "t must be in the range [0, steps["
             if x.dim() == 4:

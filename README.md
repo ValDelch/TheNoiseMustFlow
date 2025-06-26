@@ -251,6 +251,7 @@ This project is based on many different resources. Here is a list of some of the
 
 * [Ho et al., 2020] — (https://arxiv.org/abs/2006.11239)
 * [Umar Jamil](https://github.com/hkproj/pytorch-stable-diffusion) — and his video "[Coding Stable Diffusion from scratch in PyTorch](https://www.youtube.com/watch?v=ZBKpAp_6TGI&t=13980s)"
+* Jeremy Hummel and his [step-by-step guide](https://github.com/LambdaLabsML/diffusion-from-scratch)
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
