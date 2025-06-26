@@ -41,8 +41,7 @@ Welcome to **The Noise Must Flow**, your all-in-one lab for understanding, build
 This project aims to make generative diffusion approachable and powerful, offering:
 
 - Clean and modular implementations
-- Visualization tools and dashboards
-- Intuitive interfaces to explore denoising
+- Visualization tools
 - Code to help **you** build your own diffusion workflows
 
 ---
@@ -69,10 +68,10 @@ This project aims to make generative diffusion approachable and powerful, offeri
 - [x] Project setup and repo structure
 - [ ] Implement basic DDPM architecture
   - [x] Forward process (noise scheduling)
-  - [ ] Reverse sampling
+  - [x] DDPM sampling
+  - [x] DDIM sampling
+  - [ ] VAE and U-Net architectures
   - [ ] Loss functions
-- [ ] Add beta-schedule variants (linear, cosine, etc.)
-- [ ] DDIM sampling
 - [ ] Improve support for multi-resolution outputs
 - [ ] Add support for conditional diffusion (class labels, images, etc.)
 
@@ -93,10 +92,6 @@ This project aims to make generative diffusion approachable and powerful, offeri
 - [ ] Modular code with config files
 - [ ] CLI to run training and sampling
 - [ ] Documentation with usage examples
-
-### 🎛️ User Interfaces
-- [ ] Interface for sampling
-- [ ] Web-based demo / notebook
 
 ### 🌐 Educational Material
 - [ ] High-level explanation in README
@@ -247,7 +242,7 @@ Valentin Delchevalerie - 📧 vdelchevalerie@gmail.com - 🔗 [LinkedIn](https:/
 
 ## 🧠 Acknowledgments
 
-This project is based on many different resources. Here is a list of some of the major inspirations:
+This project is based on several different resources. Here is a list of some of the major inspirations:
 
 * [Ho et al., 2020] — (https://arxiv.org/abs/2006.11239)
 * [Umar Jamil](https://github.com/hkproj/pytorch-stable-diffusion) — and his video "[Coding Stable Diffusion from scratch in PyTorch](https://www.youtube.com/watch?v=ZBKpAp_6TGI&t=13980s)"
@@ -270,5 +265,3 @@ This project is based on many different resources. Here is a list of some of the
 [Python-url]: https://www.python.org/
 [PyTorch]: https://img.shields.io/badge/PyTorch-2.7.0-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white
 [PyTorch-url]: https://pytorch.org/
-[Vue.js]: https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D
-[Vue-url]: https://vuejs.org/
