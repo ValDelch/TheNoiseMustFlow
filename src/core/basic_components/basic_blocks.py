@@ -3,6 +3,8 @@ basic_blocks.py
 
 The module implements several blocks that can be used in different
 DL models, like residual blocks, attention blocks, etc.
+
+# TODO: investigate the use of https://docs.pytorch.org/torchtune/0.4/generated/torchtune.modules.RotaryPositionalEmbeddings.html
 """
 
 
