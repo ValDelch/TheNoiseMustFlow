@@ -54,23 +54,28 @@ class NoiseScheduler(torch.nn.Module):
 
         # Variance schedule parameters
         if schedule != 'cosine':
-            self.betas = getattr(self, f"_{schedule}_betas")(betas[0], betas[1])
+            betas = getattr(self, f"_{schedule}_betas")(betas[0], betas[1])
 
             # Compute the cumulative product of alphas for cumulative noise addition
-            self.alphas = 1 - self.betas
-            self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
+            alphas = 1 - betas
+            alphas_cumprod = torch.cumprod(alphas, dim=0)
         else:
-            self.betas, self.alphas_cumprod = self._cosine_betas()
+            betas, alphas_cumprod = self._cosine_betas()
 
             # Artificially recompute the alphas, since they are generally
             # not directly used in the cosine schedule
-            self.alphas = torch.zeros_like(self.alphas_cumprod)
-            self.alphas[0] = self.alphas_cumprod[0]
-            self.alphas[1:] = self.alphas_cumprod[1:] / self.alphas_cumprod[:-1]
+            alphas = torch.zeros_like(alphas_cumprod)
+            alphas[0] = alphas_cumprod[0]
+            alphas[1:] = alphas_cumprod[1:] / alphas_cumprod[:-1]
 
         self.generator = torch.Generator()
         if seed is not None:
             self.generator.manual_seed(seed)
+
+        # Register buffers
+        self.register_buffer('betas', betas)
+        self.register_buffer('alphas', alphas)
+        self.register_buffer('alphas_cumprod', alphas_cumprod)
 
     def add_noise_step(self, x: torch.Tensor, t: TensorOrInt, 
                        noise: Optional[torch.Tensor] = None) -> torch.Tensor:

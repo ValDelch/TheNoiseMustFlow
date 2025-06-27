@@ -9,6 +9,7 @@ import torch
 
 from core.schedulers import NoiseScheduler
 from core.samplers import DDPMSampler, DDIMSampler
+from core.basic_components.encodings import TimeEncoding
 
 @pytest.mark.parametrize("schedule", ["linear", "cosine", "quadratic", "sigmoid", "geometric"])
 def test_scheduler_init_valid(schedule):
@@ -235,3 +236,57 @@ def test_ddim_sample_returns_intermediates(scheduler, image, dummy_pred_noise):
 def test_ddim_invalid_step_divisor():
     with pytest.raises(AssertionError, match="steps must be a divisor"):
         DDIMSampler(NoiseScheduler(steps=100), steps=33)
+
+#
+# Tests for the encodings
+#
+
+def test_time_encoding_output_shape_batch():
+    dim = 320
+    model = TimeEncoding(dim=dim)
+    t = torch.tensor([0, 1, 2, 3])
+    out = model(t)
+    assert out.shape == (4, 4 * dim)
+
+def test_time_encoding_output_shape_single():
+    dim = 320
+    model = TimeEncoding(dim=dim)
+    t = 5
+    out = model(t)
+    assert out.shape == (1, 4 * dim)
+
+def test_time_encoding_invalid_negative_t():
+    model = TimeEncoding(dim=320)
+    t = -1
+    with pytest.raises(AssertionError, match="t must be a non-negative integer"):
+        model(t)
+
+def test_time_encoding_invalid_dim_odd():
+    with pytest.raises(AssertionError, match="dim must be an even integer"):
+        TimeEncoding(dim=321)
+
+def test_time_encoding_get_time_encoding_batch_shape():
+    dim = 128
+    model = TimeEncoding(dim=dim)
+    t = torch.tensor([0, 1, 2])
+    enc = model.get_time_encoding(t)
+    assert enc.shape == (3, dim)
+
+def test_time_encoding_get_time_encoding_single_shape():
+    dim = 128
+    model = TimeEncoding(dim=dim)
+    t = 7
+    enc = model.get_time_encoding(t)
+    assert enc.shape == (1, dim)
+
+def test_time_encoding_get_time_encoding_invalid_tensor_dim():
+    model = TimeEncoding(dim=64)
+    t = torch.tensor([[1, 2]])
+    with pytest.raises(AssertionError, match="t must be a 1D tensor"):
+        model.get_time_encoding(t)
+
+def test_time_encoding_get_time_encoding_invalid_tensor_negative():
+    model = TimeEncoding(dim=64)
+    t = torch.tensor([1, -2])
+    with pytest.raises(AssertionError, match="t must contain non-negative integers"):
+        model.get_time_encoding(t)
