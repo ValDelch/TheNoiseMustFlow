@@ -10,7 +10,6 @@ from typing import Union
 
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 
 # Type alias for tensor or integer

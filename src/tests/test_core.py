@@ -2,6 +2,7 @@
 
 import pytest
 import torch
+from torch import nn
 
 #
 # Tests for the schedulers
@@ -10,6 +11,7 @@ import torch
 from core.schedulers import NoiseScheduler
 from core.samplers import DDPMSampler, DDIMSampler
 from core.basic_components.encodings import TimeEncoding
+from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
 
 @pytest.mark.parametrize("schedule", ["linear", "cosine", "quadratic", "sigmoid", "geometric"])
 def test_scheduler_init_valid(schedule):
@@ -290,3 +292,66 @@ def test_time_encoding_get_time_encoding_invalid_tensor_negative():
     t = torch.tensor([1, -2])
     with pytest.raises(AssertionError, match="t must contain non-negative integers"):
         model.get_time_encoding(t)
+
+#
+# Tests for the basic blocks
+#
+
+@pytest.mark.parametrize("in_channels,out_channels,kernel_size,groups,activation,padding,use_bias,padding_mode,dropout", [
+    (8, 8, 3, 4, nn.ReLU(), 'same', True, 'zeros', 0.0),
+    (8, 16, 3, 4, nn.GELU(), 'same', False, 'zeros', 0.1),
+    (16, 16, 1, 4, None, 0, True, 'zeros', 0.2),
+    (4, 4, 5, 2, nn.SiLU(), 'same', True, 'zeros', 0.0),
+])
+def test_basic_residual_block_forward_shapes(
+    in_channels, out_channels, kernel_size, groups, activation, padding, use_bias, padding_mode, dropout
+):
+    block = BasicResidualBlock(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=kernel_size,
+        groups=groups,
+        activation=activation,
+        padding=padding,
+        use_bias=use_bias,
+        padding_mode=padding_mode,
+        dropout=dropout,
+    )
+    x = torch.randn(2, in_channels, 16, 16)
+    y = block(x)
+    assert y.shape == (2, out_channels, 16, 16)
+
+def test_basic_residual_block_skip_connection_identity():
+    block = BasicResidualBlock(8, 8, 3, 4)
+    x = torch.randn(1, 8, 8, 8)
+    y = block(x)
+    assert y.shape == x.shape
+
+def test_basic_residual_block_skip_connection_conv():
+    block = BasicResidualBlock(8, 16, 3, 4)
+    x = torch.randn(1, 8, 8, 8)
+    y = block(x)
+    assert y.shape == (1, 16, 8, 8)
+
+def test_basic_residual_block_forward_raises_on_wrong_dim():
+    block = BasicResidualBlock(4, 4, 3, 2)
+    x = torch.randn(4, 4, 8)  # 3D input
+    with pytest.raises(AssertionError, match="Input tensor must be 4D"):
+        block(x)
+
+@pytest.mark.parametrize("in_channels,num_heads,groups,dropout", [
+    (16, 4, 8, 0.0),
+    (16, 8, 16, 0.1),
+    (32, 16, 8, 0.2),
+])
+def test_basic_attention_block_forward_shapes(in_channels, num_heads, groups, dropout):
+    block = BasicAttentionBlock(in_channels=in_channels, num_heads=num_heads, groups=groups, dropout=dropout)
+    x = torch.randn(2, in_channels, 16, 16)
+    y = block(x)
+    assert y.shape == (2, in_channels, 16, 16)
+
+def test_basic_attention_block_forward_raises_on_wrong_dim():
+    block = BasicAttentionBlock(4, 2, 2)
+    x = torch.randn(4, 4, 8)  # 3D input
+    with pytest.raises(AssertionError, match="Input tensor must be 4D"):
+        block(x)
