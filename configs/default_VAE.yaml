@@ -1,0 +1,99 @@
+# This YAML file defines the core architecture of the encoder for a Variational Autoencoder (VAE).
+#
+# It uses reusable "blocks" as templates for convolutional, residual, and attention layers,
+# and then composes them into a sequence of "layers".
+#
+# This architecture will always be followed by a group normalization layer, an activation function,
+# and two convolutional layers to produce the final output, aka the latent representation. Those
+# final layers are not defined here but will be added at the end of the encoder.
+#
+# The goal is to keep the architecture flexible and modular, allowing quick changes
+# by modifying only this file.
+
+# Blocks define reusable layer templates with parameter placeholders like $out and $n.
+# These are substituted using values in the 'with' section of each layer.
+# Layer types:
+# - conv: standard 2D convolution
+# - res: residual block (user-defined implementation)
+# - att: attention block (user-defined implementation)
+
+base_channels: 128 # This defines what will replace the 'f'
+latent_dim: 4 # The latent dimension of the VAE, which is the output of the encoder
+num_heads: 8 # Number of attention heads for attention blocks
+activation: SiLU # Activation function to be used in the residual blocks and at the end of the encoder
+groups: 32 # Number of groups for group normalization
+dropout: 0.1 # Dropout rate for regularization
+
+encoder:
+  blocks:
+    simple_conv: # A template for a simple convolutional layer
+      type: conv
+      out_channels: $out
+      kernel_size: 3
+      padding: 1
+      padding_mode: 'zeros'
+
+    down_conv: # A template for a downsampling convolutional layer
+      type: conv
+      out_channels: $out
+      kernel_size: 3
+      stride: 2
+      padding: 1
+      padding_mode: 'zeros'
+
+    ResBlock: # A template for a residual block
+      type: res
+      out_channels: $out
+      kernel_size: 3
+      padding: 1
+      padding_mode: 'zeros'
+      repeat: $n # Number of times the block is repeated
+
+    AttBlock: # A template for an attention block
+      type: att
+
+  layers:
+    - use: simple_conv
+      with:
+        out: 1f
+
+    - use: ResBlock
+      with:
+        out: 1f
+        n: 2
+
+    - use: down_conv
+      with:
+        out: 1f
+
+    - use: ResBlock
+      with:
+        out: 2f
+        n: 2
+
+    - use: down_conv
+      with:
+        out: 2f
+
+    - use: ResBlock
+      with:
+        out: 4f
+        n: 2
+
+    - use: down_conv
+      with:
+        out: 4f
+
+    - use: ResBlock
+      with:
+        out: 4f
+        n: 1
+
+    - use: AttBlock
+      with:
+        out: 4f
+
+    - use: ResBlock
+      with:
+        out: 4f
+        n: 1

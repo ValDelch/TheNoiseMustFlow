@@ -9,7 +9,7 @@ DL models, like residual blocks, attention blocks, etc.
 
 
 from __future__ import annotations
-from typing import Optional, Union
+from typing import Optional, Union, Type
 import warnings
 
 import torch
@@ -28,7 +28,7 @@ class BasicResidualBlock(nn.Module):
     """
 
     def __init__(self, in_channels: int, out_channels: int, kernel_size: int = 3,
-                 groups: int = 32, activation: Optional[nn.Module] = None, 
+                 groups: int = 32, activation: Optional[Type[nn.Module]] = None, 
                  padding: Union[int, str] = 'same', use_bias: bool = True, 
                  padding_mode: str = 'zeros', dropout: float = 0.0, 
                  d_context: Optional[int] = None):

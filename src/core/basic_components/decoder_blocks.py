@@ -1,6 +1,5 @@
 """
 decoder_blocks.py
 
-The module implements several blocks that can be used to define
-the decoding path of different DL models (VAE, U-Net, etc.)
+The module implements the decoding path of VAE and UNet architectures.
 """

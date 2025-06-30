@@ -6,7 +6,6 @@
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
-[![LinkedIn][linkedin-shield]][linkedin-url]
 
 ![Test Status](https://github.com/ValDelch/TheNoiseMustFlow/actions/workflows/tests.yml/badge.svg)
 
@@ -261,8 +260,6 @@ This project is based on several different resources. Here is a list of some of 
 [stars-url]: https://github.com/ValDelch/TheNoiseMustFlow/stargazers
 [issues-shield]: https://img.shields.io/github/issues/ValDelch/TheNoiseMustFlow.svg?style=for-the-badge
 [issues-url]: https://github.com/ValDelch/TheNoiseMustFlow/issues
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://www.linkedin.com/in/valentin-delchevalerie-075ab4194
 
 [Python]: https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python&logoColor=white
 [Python-url]: https://www.python.org/
