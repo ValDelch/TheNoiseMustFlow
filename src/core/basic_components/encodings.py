@@ -66,8 +66,8 @@ class TimeEncoding(nn.Module):
             t: time step. Can be a tensor of shape (batch_size,) or a single integer.
 
         Returns:
-            A tensor of shape (batch_size, dim) containing the time encoding.
-            Note: The returned tensor is always 2D, even for a single integer input (shape will be (1, dim)).
+            A tensor of shape (batch_size, 4*dim) containing the time encoding.
+                Note: The returned tensor is always 2D, even for a single integer input (shape will be (1, 4*dim)).
         """
         device = self.freqs.device
 

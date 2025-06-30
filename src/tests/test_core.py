@@ -1,17 +1,24 @@
 # tests/test_core.py
 
+import warnings
+
 import pytest
 import torch
 from torch import nn
+
+from core.schedulers import NoiseScheduler
+from core.samplers import DDPMSampler, DDIMSampler
+from core.basic_components.encodings import TimeEncoding
+from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock, BasicFeedForwardBlock
+from core.basic_components.functional_blocks import (
+    LayerNorm, MultiWaveletAct, SelfAttention, CrossAttention, GEGLU, Upsample
+)
 
 #
 # Tests for the schedulers
 #
 
-from core.schedulers import NoiseScheduler
-from core.samplers import DDPMSampler, DDIMSampler
-from core.basic_components.encodings import TimeEncoding
-from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
+# NoiseScheduler
 
 @pytest.mark.parametrize("schedule", ["linear", "cosine", "quadratic", "sigmoid", "geometric"])
 def test_scheduler_init_valid(schedule):
@@ -189,6 +196,8 @@ def batch_image():
 def dummy_pred_noise():
     return lambda x, t: torch.zeros_like(x)
 
+# DDPMSampler
+
 def test_ddpm_sample_prev_step_shape(scheduler, image):
     sampler = DDPMSampler(scheduler)
     noise = torch.randn_like(image)
@@ -211,6 +220,8 @@ def test_ddpm_sample_returns_intermediates(scheduler, image, dummy_pred_noise):
     assert isinstance(result, list)
     for r in result:
         assert r.shape == image.shape
+
+# DDIMSampler
 
 def test_ddim_sample_prev_step_shape(scheduler, image):
     sampler = DDIMSampler(scheduler, steps=10, eta=0.0)
@@ -242,6 +253,8 @@ def test_ddim_invalid_step_divisor():
 #
 # Tests for the encodings
 #
+
+# TimeEncoding
 
 def test_time_encoding_output_shape_batch():
     dim = 320
@@ -297,6 +310,8 @@ def test_time_encoding_get_time_encoding_invalid_tensor_negative():
 # Tests for the basic blocks
 #
 
+# BasicResidualBlock
+
 @pytest.mark.parametrize("in_channels,out_channels,kernel_size,groups,activation,padding,use_bias,padding_mode,dropout", [
     (8, 8, 3, 4, nn.ReLU(), 'same', True, 'zeros', 0.0),
     (8, 16, 3, 4, nn.GELU(), 'same', False, 'zeros', 0.1),
@@ -339,19 +354,411 @@ def test_basic_residual_block_forward_raises_on_wrong_dim():
     with pytest.raises(AssertionError, match="Input tensor must be 4D"):
         block(x)
 
-@pytest.mark.parametrize("in_channels,num_heads,groups,dropout", [
-    (16, 4, 8, 0.0),
-    (16, 8, 16, 0.1),
-    (32, 16, 8, 0.2),
+def test_basic_residual_block_conditioning_shape():
+    block = BasicResidualBlock(in_channels=8, out_channels=8, groups=4, d_context=16)
+    x = torch.randn(4, 8, 16, 16)
+    context = torch.randn(4, 16)  # batch size matches
+    y = block(x, context)
+    assert y.shape == x.shape
+
+def test_basic_residual_block_conditioning_broadcasting():
+    block = BasicResidualBlock(in_channels=4, out_channels=4, groups=4, d_context=10)
+    x = torch.randn(2, 4, 8, 8)
+    context = torch.randn(2, 10)
+    out = block(x, context)
+    assert out.shape == x.shape
+
+def test_basic_residual_block_conditioning_wrong_shape():
+    block = BasicResidualBlock(in_channels=4, out_channels=4, groups=4, d_context=10)
+    x = torch.randn(2, 4, 8, 8)
+    context = torch.randn(2, 10, 1)  # wrong shape
+    with pytest.raises(AssertionError, match="Conditioning tensor must be 2D"):
+        block(x, context)
+
+def test_basic_residual_block_conditioning_none_warns_once():
+    block = BasicResidualBlock(in_channels=4, out_channels=4, groups=4, d_context=10)
+    x = torch.randn(2, 4, 8, 8)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        _ = block(x, context=None)
+        warning_msgs = [str(warn.message) for warn in w]
+        assert any("Context tensor is None" in msg for msg in warning_msgs)
+
+# BasicAttentionBlock
+
+@pytest.mark.parametrize("channels,num_heads,groups,dropout", [
+    (16, 4, 4, 0.0),
+    (32, 8, 8, 0.1),
 ])
-def test_basic_attention_block_forward_shapes(in_channels, num_heads, groups, dropout):
-    block = BasicAttentionBlock(in_channels=in_channels, num_heads=num_heads, groups=groups, dropout=dropout)
-    x = torch.randn(2, in_channels, 16, 16)
-    y = block(x)
-    assert y.shape == (2, in_channels, 16, 16)
+def test_basic_attention_block_output_shape(channels, num_heads, groups, dropout):
+    block = BasicAttentionBlock(channels, num_heads=num_heads, groups=groups, dropout=dropout)
+    x = torch.randn(2, channels, 16, 16)
+    out = block(x)
+    assert out.shape == x.shape
 
 def test_basic_attention_block_forward_raises_on_wrong_dim():
-    block = BasicAttentionBlock(4, 2, 2)
-    x = torch.randn(4, 4, 8)  # 3D input
+    block = BasicAttentionBlock(8, num_heads=2, groups=4)
+    x = torch.randn(2, 8, 16)  # 3D input
     with pytest.raises(AssertionError, match="Input tensor must be 4D"):
         block(x)
+
+def test_basic_attention_block_context_path():
+    block = BasicAttentionBlock(16, num_heads=4, groups=4, d_context=32)
+    x = torch.randn(2, 16, 8, 8)
+    context = torch.randn(2, 64, 32) # (batch_size, seq_len, d_context)
+    out = block(x, context)
+    assert out.shape == x.shape
+
+def test_basic_attention_block_context_wrong_shape():
+    block = BasicAttentionBlock(16, num_heads=4, groups=4, d_context=32)
+    x = torch.randn(2, 16, 8, 8)
+    context = torch.randn(2, 64, 32, 1) # too many dims
+    with pytest.raises(AssertionError, match="Context tensor must be 2D"):
+        block.apply_context(torch.randn(2, 64, 16), context)
+
+def test_basic_attention_block_context_none_warns_once():
+    block = BasicAttentionBlock(16, num_heads=4, groups=4, d_context=32)
+    x = torch.randn(2, 16, 8, 8)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        _ = block(x, context=None)
+        assert any("Context tensor is None" in str(warning.message) for warning in w)
+
+def test_basic_attention_block_activation_custom():
+    class Swish(nn.Module):
+        def forward(self, x): return x * torch.sigmoid(x)
+
+    block = BasicAttentionBlock(16, num_heads=4, groups=4, activation=Swish())
+    x = torch.randn(2, 16, 8, 8)
+    out = block(x)
+    assert out.shape == x.shape
+
+# BasicFeedForwardBlock
+
+@pytest.mark.parametrize("layer_norm", [True, False])
+@pytest.mark.parametrize("dropout", [0.0, 0.5])
+def test_feedforward_output_shape(layer_norm, dropout):
+    dim = 64
+    d_ff = 128
+    out_features = 32
+    batch_size = 4
+    seq_len = 10
+
+    ff = BasicFeedForwardBlock(dim=dim, d_ff=d_ff, out_features=out_features,
+                               activation=nn.GELU(), layer_norm=layer_norm, dropout=dropout)
+    
+    x = torch.randn(batch_size, seq_len, dim)
+    y = ff(x)
+    
+    assert y.shape == (batch_size, seq_len, out_features), \
+        f"Expected output shape {(batch_size, seq_len, out_features)}, got {y.shape}"
+
+def test_feedforward_no_out_features_defaults_to_dim():
+    dim = 64
+    d_ff = 128
+    ff = BasicFeedForwardBlock(dim=dim, d_ff=d_ff)
+    x = torch.randn(2, 8, dim)
+    y = ff(x)
+    assert y.shape[-1] == dim, "Output dim should default to input dim when out_features is None"
+
+def test_feedforward_gradient_flow():
+    dim = 32
+    d_ff = 64
+    ff = BasicFeedForwardBlock(dim=dim, d_ff=d_ff)
+    x = torch.randn(2, 8, dim, requires_grad=True)
+    y = ff(x)
+    y.mean().backward()
+
+    assert x.grad is not None, "Gradients should flow to the input"
+    assert any(p.grad is not None for p in ff.parameters()), "All trainable parameters should receive gradients"
+
+def test_feedforward_dropout_effect():
+    dim = 32
+    d_ff = 64
+    dropout = 0.9
+    ff = BasicFeedForwardBlock(dim=dim, d_ff=d_ff, dropout=dropout)
+    ff.train()  # Enable dropout
+
+    x = torch.randn(10, 5, dim)
+    out1 = ff(x)
+    out2 = ff(x)
+
+    # Outputs should differ due to dropout
+    assert not torch.allclose(out1, out2), "Dropout should cause output variance in training mode"
+
+def test_feedforward_invalid_input_dimension():
+    dim = 16
+    d_ff = 32
+    ff = BasicFeedForwardBlock(dim=dim, d_ff=d_ff)
+    x = torch.randn(16)  # Only 1D, invalid input
+    with pytest.raises(AssertionError):
+        ff(x)
+
+#
+# Tests for the functional blocks
+#
+
+# SelfAttention
+
+@pytest.mark.parametrize("causal_mask", [False, True])
+@pytest.mark.parametrize("return_attn", [False, True])
+def test_self_attention_shape(causal_mask, return_attn):
+    dim = 64
+    model = SelfAttention(dim=dim, num_heads=8)
+    x = torch.randn(2, 10, dim)
+
+    output = model(x, causal_mask=causal_mask, return_attn=return_attn)
+    if return_attn:
+        y, attn = output
+        assert y.shape == (2, 10, dim)
+        assert attn.shape == (2, 8, 10, 10)
+    else:
+        assert output.shape == (2, 10, dim)
+
+def test_self_attention_key_padding_mask():
+    dim = 32
+    model = SelfAttention(dim=dim, num_heads=4)
+    x = torch.randn(2, 5, dim)
+    mask = torch.tensor([[False, False, True, True, True],
+                         [False, True, False, False, True]])
+    output = model(x, key_padding_mask=mask)
+    assert output.shape == x.shape
+
+# CrossAttention
+
+def test_cross_attention_shape_and_output():
+    dim = 64
+    cross_dim = 64
+    model = CrossAttention(dim=dim, cross_dim=cross_dim, num_heads=8)
+    x = torch.randn(2, 6, dim)
+    context = torch.randn(2, 10, cross_dim)
+
+    output = model(x, context)
+    assert output.shape == (2, 6, dim)
+
+def test_cross_attention_key_padding_mask():
+    dim = 32
+    cross_dim = 32
+    model = CrossAttention(dim=dim, cross_dim=cross_dim, num_heads=4)
+    x = torch.randn(2, 4, dim)
+    context = torch.randn(2, 6, cross_dim)
+    mask = torch.tensor([[False, False, True, True, True, True],
+                         [False, True, False, False, True, False]])
+
+    output = model(x, context, key_padding_mask=mask)
+    assert output.shape == (2, 4, dim)
+
+def test_cross_attention_return_attn():
+    model = CrossAttention(dim=32, cross_dim=32, num_heads=4)
+    x = torch.randn(2, 4, 32)
+    context = torch.randn(2, 4, 32)
+    out, attn = model(x, context, return_attn=True)
+    assert out.shape == (2, 4, 32)
+    assert attn.shape == (2, 4, 4, 4)  # (batch, heads, seq_len, cross_seq_len)
+
+def test_cross_attention_causal_warns_once():
+    model = CrossAttention(dim=32, cross_dim=32, num_heads=4)
+    x = torch.randn(1, 4, 32)
+    context = torch.randn(1, 4, 32)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        model(x, context, causal_mask=True)
+
+        warning_msgs = [str(warn.message) for warn in w]
+        matching = [msg for msg in warning_msgs if "Causal masking is typically only used in self-attention" in msg]
+
+        assert len(matching) == 1
+
+def test_cross_attention_invalid_padding_mask_shape():
+    model = CrossAttention(dim=32, cross_dim=32, num_heads=4)
+    x = torch.randn(2, 4, 32)
+    context = torch.randn(2, 6, 32)
+    bad_mask = torch.ones(2, 5, dtype=torch.bool)  # wrong shape
+
+    with pytest.raises(AssertionError):
+        model(x, context, key_padding_mask=bad_mask)
+
+def test_cross_attention_invalid_causal_shape():
+    model = CrossAttention(dim=32, cross_dim=32, num_heads=4)
+    x = torch.randn(2, 4, 32)
+    context = torch.randn(2, 6, 32)  # cross_seq_len != seq_len
+
+    with pytest.raises(AssertionError):
+        model(x, context, causal_mask=True)
+
+# LayerNorm
+
+def test_layernorm_shape_and_type():
+    ln = LayerNorm(features=32)
+    x = torch.randn(8, 32)
+    out = ln(x)
+    assert out.shape == x.shape, "Output shape should match input shape"
+    assert isinstance(out, torch.Tensor), "Output should be a torch.Tensor"
+
+def test_layernorm_normalization():
+    ln = LayerNorm(features=16)
+    x = torch.randn(4, 16)
+    out = ln(x)
+
+    mean = out.mean(dim=-1)
+    std = out.std(dim=-1, unbiased=False)
+
+    assert torch.allclose(mean, torch.zeros_like(mean), atol=1e-5), "Mean should be ~0 after normalization"
+    assert torch.allclose(std, torch.ones_like(std), atol=1e-4), "Std should be ~1 after normalization"
+
+def test_layernorm_gradient_flow():
+    ln = LayerNorm(features=64)
+    x = torch.randn(3, 64, requires_grad=True)
+    out = ln(x)
+    loss = out.sum()
+    loss.backward()
+
+    assert x.grad is not None, "Input should receive gradients"
+    assert ln.alphas.grad is not None, "alphas should receive gradients"
+    assert ln.betas.grad is not None, "betas should receive gradients"
+
+def test_layernorm_multi_dim_input():
+    ln = LayerNorm(features=32)
+    x = torch.randn(2, 4, 8, 32)  # (batch, H, W, C)
+    out = ln(x)
+    assert out.shape == x.shape
+
+    mean = out.mean(dim=-1)
+    std = out.std(dim=-1, unbiased=False)
+
+    assert torch.allclose(mean, torch.zeros_like(mean), atol=1e-5)
+    assert torch.allclose(std, torch.ones_like(std), atol=1e-4)
+
+def test_invalid_input_dimension():
+    ln = LayerNorm(features=10)
+    x = torch.randn(10)  # Only 1D
+    with pytest.raises(AssertionError):
+        ln(x)
+
+def test_parameter_shapes():
+    features = 24
+    ln = LayerNorm(features=features)
+    assert ln.alphas.shape == (features,), "alphas parameter shape is incorrect"
+    assert ln.betas.shape == (features,), "betas parameter shape is incorrect"
+
+# Upsample
+
+@pytest.mark.parametrize("scale_factor", [2, 3, 0.5])
+@pytest.mark.parametrize("mode", ['bilinear', 'nearest'])
+@pytest.mark.parametrize("align_corners", [True, False])
+def test_upsample_shape(scale_factor, mode, align_corners):
+    block = Upsample(channels=8, scale_factor=scale_factor, mode=mode, align_corners=align_corners)
+    x = torch.randn(2, 8, 16, 16)
+    y = block(x)
+
+    expected_size = int(16 * scale_factor)
+    assert y.shape == (2, 8, expected_size, expected_size), \
+        f"Expected output shape (2, 8, {expected_size}, {expected_size}), got {y.shape}"
+
+def test_upsample_forward_invalid_dim():
+    block = Upsample(channels=4, scale_factor=2)
+    x = torch.randn(4, 4, 16)  # invalid shape
+    with pytest.raises(RuntimeError):
+        _ = block(x)
+
+def test_upsample_gradients():
+    block = Upsample(channels=4, scale_factor=2)
+    x = torch.randn(2, 4, 8, 8, requires_grad=True)
+    y = block(x)
+    loss = y.mean()
+    loss.backward()
+    assert x.grad is not None, "Gradients did not flow back through Upsample block"
+
+def test_upsample_with_different_batch_size():
+    block = Upsample(channels=6, scale_factor=1.5, mode='bilinear')
+    x = torch.randn(3, 6, 20, 20)
+    y = block(x)
+    expected_size = int(20 * 1.5)
+    assert y.shape == (3, 6, expected_size, expected_size), "Upsample block did not produce expected shape for fractional scale"
+
+# GEGLU
+
+def test_geglu_output_shape():
+    module = GEGLU(in_dim=32, inter_dim=64)
+    x = torch.randn(4, 10, 32)
+    y = module(x)
+    assert y.shape == (4, 10, 32), "Output shape mismatch for GEGLU forward pass."
+
+def test_geglu_no_bias():
+    module = GEGLU(in_dim=16, inter_dim=32, bias=False)
+    x = torch.randn(2, 8, 16)
+    y = module(x)
+    assert y.shape == (2, 8, 16), "GEGLU without bias gave incorrect output shape."
+
+def test_geglu_gradients():
+    module = GEGLU(in_dim=16, inter_dim=8)
+    x = torch.randn(5, 16, requires_grad=True)
+    y = module(x)
+    loss = y.sum()
+    loss.backward()
+    assert x.grad is not None, "Gradients did not flow through GEGLU."
+    assert x.grad.shape == x.shape, "Gradient shape mismatch."
+
+def test_geglu_invalid_input_dim():
+    module = GEGLU(in_dim=16, inter_dim=8)
+    x = torch.randn(5, 16, 8)  # 3D, but last dim != in_dim
+    with pytest.raises(RuntimeError):
+        module(x)
+
+def test_geglu_asserts_on_invalid_rank():
+    module = GEGLU(in_dim=16, inter_dim=8)
+    x = torch.randn(16)  # 1D tensor
+    with pytest.raises(AssertionError, match="Input tensor must be at least 2D"):
+        module(x)
+
+# MultiWaveletAct
+
+@pytest.mark.parametrize("wavelet_only", [True, False])
+@pytest.mark.parametrize("normalize", [True, False])
+def test_output_shape(wavelet_only, normalize):
+    dim = 64
+    batch, seq = 8, 10
+    model = MultiWaveletAct(dim=dim, wavelet_only=wavelet_only, normalize=normalize)
+    x = torch.randn(batch, seq, dim)
+    y = model(x)
+    assert y.shape == x.shape, f"Expected output shape {x.shape}, got {y.shape}"
+
+def test_gradient_flow():
+    dim = 32
+    model = MultiWaveletAct(dim=dim)
+    x = torch.randn(4, 16, dim, requires_grad=True)
+    y = model(x)
+    loss = y.mean()
+    loss.backward()
+    
+    # Check that gradients flow through freq_scales, log_scales, and weights
+    assert model.freq_scales.grad is not None, "No gradient through freq_scales"
+    assert model.log_scales.grad is not None, "No gradient through log_scales"
+    assert model.weights.grad is not None, "No gradient through weights"
+    assert x.grad is not None, "No gradient through input"
+
+def test_input_shape_variants():
+    dim = 32
+    model = MultiWaveletAct(dim=dim)
+
+    x_2d = torch.randn(5, dim)
+    x_3d = torch.randn(3, 7, dim)
+    x_4d = torch.randn(2, 3, 4, dim)
+
+    assert model(x_2d).shape == x_2d.shape
+    assert model(x_3d).shape == x_3d.shape
+    assert model(x_4d).shape == x_4d.shape
+
+def test_invalid_input_dim():
+    model = MultiWaveletAct(dim=16)
+    x = torch.randn(10) # 1D input, invalid
+    with pytest.raises(AssertionError):
+        model(x)
+
+def test_invalid_input_feature_size():
+    model = MultiWaveletAct(dim=64)
+    x = torch.randn(2, 10, 32) # Last dim != model.dim
+    with pytest.raises(AssertionError):
+        model(x)

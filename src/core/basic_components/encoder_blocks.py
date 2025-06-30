@@ -1,6 +1,15 @@
 """
 encoder_blocks.py
 
-The module implements several blocks that can be used to define
-the encoding path of different DL models (VAE, U-Net, etc.)
+The module implements the encoding path of a Variational Autoencoder (VAE)
 """
+
+
+from __future__ import annotations
+
+import torch
+from torch import nn
+
+
+class VAEConvEncoderBlock(nn.Module):
+    pass

@@ -140,11 +140,16 @@ Here's a quick overview of the main components in this repository:
 | `configs/`                            | YAML/JSON configuration files for models and training        |
 | `docs/`                               | Project documentation and references                         |
 | `notebooks/`                          | Jupyter notebooks for tutorials and mathematical insights    |
-| └── `__a__Noise_Schedulers.ipynb`     | Notebook introducing the Noise Schedulers                    |
+| ├── `__a__Noise_Schedulers.ipynb`     | Notebook introducing the Noise Schedulers                    |
+| └── `__b__Samplers.ipynb`             | Notebook introducing the Samplers                            |
 | `src/`                                | Root source folder for all Python modules                    |
 | ├── `core/`                           | Core logic for diffusion models and sampling                 |
-| │   ├── `building_blocks.py`          | Modular building blocks used inside models                   |
-| │   ├── `diffusion.py`                | Forward and reverse diffusion process                        |
+| │   ├── `basic_components/`           | Modular low-level building blocks for models                 |
+| │   │   ├── `basic_blocks.py`         | Simple building blocks                                       |
+| │   │   ├── `decoder_blocks.py`       | Decoder-specific building blocks                             |
+| │   │   ├── `encoder_blocks.py`       | Encoder-specific building blocks                             |
+| │   │   ├── `encodings.py`            | Positional or learned encodings                              |
+| │   │   └── `functional_blocks.py`    | Functional blocks like attention, normalization, etc.        |
 | │   ├── `models.py`                   | U-Net, VAE, or other neural architectures                    |
 | │   ├── `samplers.py`                 | Sampling routines from noise                                 |
 | │   └── `schedulers.py`               | Noise schedule and beta/variance utilities                   |
@@ -156,12 +161,10 @@ Here's a quick overview of the main components in this repository:
 | │   ├── `losses.py`                   | Loss functions used during training                          |
 | │   ├── `metrics.py`                  | Evaluation metrics like FID, PSNR                            |
 | │   └── `train.py`                    | Training loop orchestration                                  |
-| ├── `ui/`                             | Gradio or web-based interface for interactive demos          |
-| │   └── `interface.py`                | Script to launch the UI                                      |
-| └── `utils/`                          | Utility functions                                             |
+| └── `utils/`                          | Utility functions                                            |
 |     ├── `logger.py`                   | Logging, experiment tracking                                 |
 |     └── `visualize.py`                | Visual tools for training or generation                      |
-| `LICENSE`                             | Project license (Apache-2.0)                                 |
+| `LICENSE`                             | Project license (MIT)                                        |
 | `README.md`                           | Project overview and usage instructions                      |
 | `pyproject.toml`                      | Build and packaging configuration with project metadata      |
 
