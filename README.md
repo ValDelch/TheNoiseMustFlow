@@ -56,12 +56,12 @@ This project aims to make generative diffusion approachable and powerful, offeri
 
 ### 📦 Core Features
 - [x] Project setup and repo structure
-- [ ] Implement basic DDPM architecture
+- [x] Implement basic DDPM architecture
   - [x] Forward process (noise scheduling)
   - [x] DDPM sampling
   - [x] DDIM sampling
   - [x] VAE and U-Net architectures
-  - [ ] Loss functions
+  - [x] Loss functions
 - [ ] Add support for conditional diffusion (class labels, images, etc.)
 - [ ] Implement some utility functions to validate the configuration files
 

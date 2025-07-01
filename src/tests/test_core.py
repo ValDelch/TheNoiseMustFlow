@@ -180,6 +180,25 @@ def test_cosine_noise_one_image_full_process():
     for i in range(scheduler.steps):
         x = scheduler.add_noise_step(x, i)
 
+def test_cosine_noise_snr():
+    scheduler = NoiseScheduler(steps=10, schedule="cosine", seed=42)
+    snr_1 = scheduler.compute_snr(1)
+    snr_2 = scheduler.compute_snr(5)
+    assert snr_1 > snr_2, "SNR should decrease as t increases"
+
+def test_linear_noise_snr():
+    scheduler = NoiseScheduler(steps=10, schedule="linear", seed=42)
+    snr_1 = scheduler.compute_snr(1)
+    snr_2 = scheduler.compute_snr(5)
+    assert snr_1 > snr_2, "SNR should decrease as t increases"
+
+def test_cosine_noise_snr_tensor():
+    scheduler = NoiseScheduler(steps=10, schedule="cosine", seed=42)
+    t = torch.tensor([1, 5, 9])
+    snr = scheduler.compute_snr(t)
+    assert snr.shape == (3,), "SNR should return a tensor with the same shape as t"
+    assert snr[0] > snr[1] > snr[2], "SNR should decrease as t increases"
+
 #
 # Tests for the samplers
 #

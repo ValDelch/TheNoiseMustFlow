@@ -77,6 +77,23 @@ class NoiseScheduler(torch.nn.Module):
         self.register_buffer('alphas', alphas)
         self.register_buffer('alphas_cumprod', alphas_cumprod)
 
+    def compute_snr(self, t: TensorOrInt) -> torch.Tensor:
+        """
+        Compute the Signal-to-Noise Ratio (SNR) at a given step or steps.
+
+        Args:
+            t: The step index or tensor of indices. 
+                (0 <= t < steps), int or tensor of shape (batch_size,)
+
+        Returns:
+            A tensor containing the SNR values for the specified step(s).
+        """
+        if isinstance(t, torch.Tensor):
+            assert t.min() >= 0 and t.max() < self.steps, "t must be in the range [0, steps["
+        elif isinstance(t, int):
+            assert 0 <= t < self.steps, "t must be in the range [0, steps["
+        return self.alphas_cumprod[t] / (1. - self.alphas_cumprod[t]).clamp(min=1e-8)
+
     def add_noise_step(self, x: torch.Tensor, t: TensorOrInt, 
                        noise: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
