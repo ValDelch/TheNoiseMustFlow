@@ -17,6 +17,13 @@ from torch import nn
 
 from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
 
+# Type alias
+TensorOrMore = Union[
+    torch.Tensor,
+    tuple[torch.Tensor, tuple]
+]
+
+
 class VAEncoderBlock(nn.Module):
     """
     The encoder path of a basic Variational Autoencoder (VAE) architecture.
@@ -69,7 +76,7 @@ class VAEncoderBlock(nn.Module):
             "groups": int,
             "dropout": float
         }
-        if "AttBlock" in [k['use'] for k in config['encoder']['layers']]:
+        if "AttBlock" in [k['use'] for k in config['encoder']]:
             required_fields["num_heads"] = int
 
         # Validate the global parameters
@@ -96,11 +103,14 @@ class VAEncoderBlock(nn.Module):
             raise ValueError(f"Invalid activation spec '{act_string}': {e}")
         
         # Validate and construct the encoder structure
-        if "encoder" not in config or "layers" not in config["encoder"]:
-            raise ValueError("Missing top-level 'encoder' or its field 'layers' in configuration file.")
+        if "encoder" not in config:
+            raise ValueError("Missing top-level 'encoder' in configuration file.")
+        if "blocks" not in config:
+            raise ValueError("Missing 'blocks' field in the configuration file. \
+                             Please define the blocks used in the encoder/decoder.")
         
         encoder = config["encoder"]
-        blocks = encoder.get("blocks", {})
+        blocks = config["blocks"]
 
         def resolve_f(val):
             if isinstance(val, str) and 'f' in val:
@@ -113,7 +123,7 @@ class VAEncoderBlock(nn.Module):
 
         layers = []
         in_channels = self.in_channels
-        for layer in encoder["layers"]:
+        for layer in encoder:
             if 'use' not in layer:
                 raise ValueError("Each layer must specify a 'use' field to indicate the type of block.")
             
@@ -158,7 +168,7 @@ class VAEncoderBlock(nn.Module):
         return nn.Sequential(*layers)
     
     def forward(self, x: torch.Tensor, noise: torch.Tensor, 
-                return_stats: bool = False) -> Union[torch.Tensor, tuple]:
+                return_stats: bool = False, rescale: bool = False) -> TensorOrMore:
         """
         forward
 
@@ -168,6 +178,7 @@ class VAEncoderBlock(nn.Module):
             x: Input tensor of shape (batch_size, in_channels, height, width).
             noise: Noise tensor of shape (batch_size, latent_dim, height', width').
             return_stats: If True, returns the mean and log variance statistics.
+            rescale: If True, rescales the output tensor by 0.18215 (default is False).
 
         Returns:
             torch.Tensor: Encoded tensor of shape (batch_size, latent_dim, height', width').
@@ -185,11 +196,11 @@ class VAEncoderBlock(nn.Module):
         x = mean + stdev * noise # Reparameterization trick
 
         # Rescale if not in training mode
-        if not self.training:
+        if rescale:
             x = x * 0.18215
 
         if return_stats:
-            return x, mean, log_variance
+            return x, (mean, log_variance)
         return x
 
 
@@ -200,8 +211,8 @@ if __name__ == "__main__":
     VAEncoder = VAEncoderBlock(in_channels=1, config_file=config_path)
 
     x = torch.randn(1, 1, 256, 256)  # Example input tensor
-    noise = torch.randn(1, 4, 32, 32)  # Example noise tensor
+    noise = torch.randn(1, 4, 32, 32) # Example noise tensor
     output = VAEncoder(x, noise, return_stats=True)
-    print("Output shape:", output[0].shape)  # Encoded tensor
-    print("Mean shape:", output[1].shape)  # Mean tensor
-    print("Log variance shape:", output[2].shape)  # Log variance tensor
+    print("Output shape:", output[0].shape) # Encoded tensor
+    print("Mean shape:", output[1][0].shape) # Mean tensor
+    print("Log variance shape:", output[1][1].shape) # Log variance tensor

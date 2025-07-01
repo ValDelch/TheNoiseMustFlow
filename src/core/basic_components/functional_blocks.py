@@ -279,7 +279,7 @@ class Upsample(nn.Module):
     A basic implementation of an upsampling block that uses bilinear interpolation.
     """
 
-    def __init__(self, channels: int, scale_factor: Union[int, float] = 2, 
+    def __init__(self, in_channels: int, out_channels: int, scale_factor: Union[int, float] = 2, 
                  mode: str = 'bilinear', align_corners: bool = True):
         """
         __init__
@@ -287,7 +287,8 @@ class Upsample(nn.Module):
         Initializes the Upsample block with the specified parameters.
 
         Args:
-            channels: Number of input channels.
+            in_channels: Number of input channels.
+            out_channels: Number of output channels.
             scale_factor: The factor by which to upsample the input tensor.
             mode: The interpolation mode to use ('nearest', 'bilinear', etc.).
             align_corners: If True, aligns the corners of the input and output tensors.
@@ -296,7 +297,9 @@ class Upsample(nn.Module):
         self.scale_factor = scale_factor
         self.mode = mode
         self.align_corners = align_corners
-        self.out_conv = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=1)
+        self.conv_1x1 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=1)
+        self.out_conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, 
+                                  kernel_size=3, padding=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -316,6 +319,7 @@ class Upsample(nn.Module):
             align_corners = None # align_corners is not used for nearest neighbor or area
             
         x = F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode, align_corners=align_corners)
+        x = self.conv_1x1(x)
         return self.out_conv(x)
     
 class GEGLU(nn.Module):

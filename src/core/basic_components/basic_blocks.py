@@ -14,7 +14,6 @@ import warnings
 
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 from core.basic_components.functional_blocks import LayerNorm, SelfAttention, CrossAttention, GEGLU
 

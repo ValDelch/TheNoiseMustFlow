@@ -1,6 +1,7 @@
 # tests/test_core.py
 
 import warnings
+import os
 
 import pytest
 import torch
@@ -13,6 +14,9 @@ from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentio
 from core.basic_components.functional_blocks import (
     LayerNorm, MultiWaveletAct, SelfAttention, CrossAttention, GEGLU, Upsample
 )
+from core.basic_components.encoder_blocks import VAEncoderBlock
+from core.basic_components.decoder_blocks import VADecoderBlock
+from core.models import VAE
 
 #
 # Tests for the schedulers
@@ -649,7 +653,8 @@ def test_parameter_shapes():
 @pytest.mark.parametrize("mode", ['bilinear', 'nearest'])
 @pytest.mark.parametrize("align_corners", [True, False])
 def test_upsample_shape(scale_factor, mode, align_corners):
-    block = Upsample(channels=8, scale_factor=scale_factor, mode=mode, align_corners=align_corners)
+    block = Upsample(in_channels=8, out_channels=8, scale_factor=scale_factor, 
+                     mode=mode, align_corners=align_corners)
     x = torch.randn(2, 8, 16, 16)
     y = block(x)
 
@@ -658,13 +663,13 @@ def test_upsample_shape(scale_factor, mode, align_corners):
         f"Expected output shape (2, 8, {expected_size}, {expected_size}), got {y.shape}"
 
 def test_upsample_forward_invalid_dim():
-    block = Upsample(channels=4, scale_factor=2)
+    block = Upsample(in_channels=4, out_channels=4, scale_factor=2)
     x = torch.randn(4, 4, 16)  # invalid shape
     with pytest.raises(RuntimeError):
         _ = block(x)
 
 def test_upsample_gradients():
-    block = Upsample(channels=4, scale_factor=2)
+    block = Upsample(in_channels=4, out_channels=4, scale_factor=2)
     x = torch.randn(2, 4, 8, 8, requires_grad=True)
     y = block(x)
     loss = y.mean()
@@ -672,11 +677,11 @@ def test_upsample_gradients():
     assert x.grad is not None, "Gradients did not flow back through Upsample block"
 
 def test_upsample_with_different_batch_size():
-    block = Upsample(channels=6, scale_factor=1.5, mode='bilinear')
+    block = Upsample(in_channels=6, out_channels=12, scale_factor=1.5, mode='bilinear')
     x = torch.randn(3, 6, 20, 20)
     y = block(x)
     expected_size = int(20 * 1.5)
-    assert y.shape == (3, 6, expected_size, expected_size), "Upsample block did not produce expected shape for fractional scale"
+    assert y.shape == (3, 12, expected_size, expected_size), "Upsample block did not produce expected shape for fractional scale"
 
 # GEGLU
 
@@ -762,3 +767,137 @@ def test_invalid_input_feature_size():
     x = torch.randn(2, 10, 32) # Last dim != model.dim
     with pytest.raises(AssertionError):
         model(x)
+
+#
+# Tests for the encoder blocks
+#
+
+# VAEncoderBlock
+
+# Fixture to locate your actual config file
+@pytest.fixture
+def default_config_path():
+    here = os.path.dirname(__file__)
+    config_path = os.path.abspath(os.path.join(here, "..", "..", "configs", "default_VAE.yaml"))
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config file not found at: {config_path}")
+    return config_path
+
+def test_encoder_instantiates_with_real_config(default_config_path):
+    encoder = VAEncoderBlock(
+        in_channels=1,
+        config_file=default_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    assert isinstance(encoder.encoder, nn.Sequential)
+
+def test_encoder_forward_output_shape(default_config_path):
+    encoder = VAEncoderBlock(
+        in_channels=1,
+        config_file=default_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    x = torch.randn(2, 1, 32, 32)
+    noise = torch.randn(2, 4, 4, 4)
+    out = encoder(x, noise)
+    assert out.shape == noise.shape
+
+def test_encoder_forward_with_stats(default_config_path):
+    encoder = VAEncoderBlock(
+        in_channels=1,
+        config_file=default_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    x = torch.randn(1, 1, 16, 16)
+    noise = torch.randn(1, 4, 2, 2)
+    out, (mean, logvar) = encoder(x, noise, return_stats=True)
+    assert out.shape == noise.shape
+    assert mean.shape == logvar.shape == noise.shape
+
+def test_encoder_invalid_config_path():
+    with pytest.raises(AssertionError, match="does not exist"):
+        VAEncoderBlock(in_channels=1, config_file="nonexistent.yaml")
+
+def test_encoder_invalid_yaml_extension():
+    with pytest.raises(AssertionError, match="must be a YAML file"):
+        VAEncoderBlock(in_channels=1, config_file="config.txt")
+
+# VADecoderBlock
+
+def test_decoder_instantiates_with_real_config(default_config_path):
+    decoder = VADecoderBlock(
+        in_channels=1,
+        config_file=default_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    assert isinstance(decoder.decoder, nn.Sequential)
+
+def test_decoder_forward_output_shape(default_config_path):
+    decoder = VADecoderBlock(
+        in_channels=1,
+        config_file=default_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    x = torch.randn(2, 4, 32, 32)
+    out = decoder(x)
+    assert out.shape == (2, 1, 256, 256)
+
+def test_decoder_invalid_config_path():
+    with pytest.raises(AssertionError, match="does not exist"):
+        VADecoderBlock(in_channels=1, config_file="nonexistent.yaml")
+
+def test_decoder_invalid_yaml_extension():
+    with pytest.raises(AssertionError, match="must be a YAML file"):
+        VADecoderBlock(in_channels=1, config_file="config.txt")
+
+# VAE
+
+def test_vae_initialization(default_config_path):
+    vae = VAE(
+        in_channels=1,
+        config_file=default_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    assert isinstance(vae.encoder, nn.Module)
+    assert isinstance(vae.decoder, nn.Module)
+
+def test_vae_forward_basic(default_config_path):
+    vae = VAE(1, default_config_path, BasicResidualBlock, BasicAttentionBlock)
+    x = torch.randn(4, 1, 32, 32)
+    noise = torch.randn(4, 4, 4, 4)  # Match latent dim
+    out = vae(x, noise)
+    assert isinstance(out, torch.Tensor)
+    assert out.shape == noise.shape
+
+def test_vae_forward_with_stats(default_config_path):
+    vae = VAE(1, default_config_path, BasicResidualBlock, BasicAttentionBlock)
+    x = torch.randn(2, 1, 32, 32)
+    noise = torch.randn(2, 4, 4, 4)
+    out, (mean, logvar) = vae(x, noise, return_stats=True)
+    assert out.shape == noise.shape
+    assert mean.shape == noise.shape
+    assert logvar.shape == noise.shape
+
+def test_vae_forward_with_rec(default_config_path):
+    vae = VAE(1, default_config_path, BasicResidualBlock, BasicAttentionBlock)
+    x = torch.randn(2, 1, 32, 32)
+    noise = torch.randn(2, 4, 4, 4)
+    out, rec = vae(x, noise, return_rec=True)
+    assert out.shape == noise.shape
+    assert rec.shape[0] == x.shape[0]
+    assert rec.shape[2:] == x.shape[2:]
+
+def test_vae_forward_with_all(default_config_path):
+    vae = VAE(1, default_config_path, BasicResidualBlock, BasicAttentionBlock)
+    x = torch.randn(1, 1, 16, 16)
+    noise = torch.randn(1, 4, 2, 2)
+    out, (mean, logvar), rec = vae(x, noise, return_stats=True, return_rec=True)
+    assert out.shape == noise.shape
+    assert mean.shape == logvar.shape == noise.shape
+    assert rec.shape == x.shape

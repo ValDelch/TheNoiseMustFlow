@@ -137,6 +137,8 @@ Here's a quick overview of the main components in this repository:
 |---------------------------------------|--------------------------------------------------------------|
 | `assets/`                             | Diagrams, logos, and generated outputs                       |
 | `configs/`                            | YAML/JSON configuration files for models and training        |
+| ├── `default_VAE.yaml`                | Default configuration for VAE architecture                   |
+| └── `default_UNet.yaml`               | Default configuration for U-Net architecture                 |
 | `docs/`                               | Project documentation and references                         |
 | `notebooks/`                          | Jupyter notebooks for tutorials and mathematical insights    |
 | ├── `__a__Noise_Schedulers.ipynb`     | Notebook introducing the Noise Schedulers                    |
