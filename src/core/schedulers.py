@@ -1,12 +1,10 @@
 """
 schedule.py
 
-This module provides noise schedulers which are used to control the
-noise flow in the forward process.
+This module provides noise schedulers which are used to control the noise flow in the forward process.
 
-The main distinction between schedulers is how the noise variance
-is adjusted over time. Some schedulers use a linear schedule, while
-others use a cosine schedule, or even some trainable parameters.
+The main distinction between schedulers is how the noise variance is adjusted over time.
+Some schedulers use a linear schedule, while others use a cosine schedule, or even some trainable parameters.
 """
 
 

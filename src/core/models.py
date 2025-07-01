@@ -1,10 +1,8 @@
 """
 models.py
 
-The module implements the different deep learning models that
-are useful in the diffusion pipeline. The main architectures are
-the U-Net used to sample noise, the VAE to build latent
-representations of images.
+The module implements the different deep learning models that are useful in the diffusion pipeline. 
+The main architectures are the U-Net used to sample noise, the VAE to build latent representations of images.
 """
 
 
@@ -33,9 +31,8 @@ class VAE(nn.Module):
     """
     Variational Autoencoder (VAE) model.
 
-    This model consists of an encoder and a decoder block.
-    The encoder compresses the input into a latent representation,
-    while the decoder reconstructs the input from the latent space.
+    This model consists of an encoder and a decoder block. The encoder compresses the
+    input into a latent representation, while the decoder reconstructs the input from the latent space.
     """
 
     def __init__(self, in_channels: int, config_file: str,
@@ -104,9 +101,9 @@ class UNet(nn.Module):
     """
     U-Net model.
 
-    This model consists of an encoder and a decoder U-Net block.
-    The encoder compresses the input into a latent representation, and
-    the decoder reconstructs the input from the latent space, with skip connections.
+    This model consists of an encoder and a decoder U-Net block. The encoder compresses
+    the input into a latent representation, and the decoder reconstructs the input from
+    the latent space, with skip connections.
     """
 
     def __init__(self, latent_dim: int, config_file: str,
