@@ -60,21 +60,19 @@ This project aims to make generative diffusion approachable and powerful, offeri
   - [x] Forward process (noise scheduling)
   - [x] DDPM sampling
   - [x] DDIM sampling
-  - [ ] VAE and U-Net architectures
+  - [x] VAE and U-Net architectures
   - [ ] Loss functions
-- [ ] Improve support for multi-resolution outputs
 - [ ] Add support for conditional diffusion (class labels, images, etc.)
 - [ ] Implement some utility functions to validate the configuration files
 
 ### 🧪 Training & Evaluation
 - [ ] Training loop with logging
-- [ ] Metrics: loss, FID, PSNR (optionally)
+- [ ] Metrics: loss, FID, PSNR
 - [ ] Checkpointing & resume
 - [ ] Support for distributed training
 - [ ] Add pretrained model zoo
 
 ### 🎨 Visualization
-- [ ] Save sampled images during training
 - [ ] Animate denoising steps
 - [ ] Plot noise schedule and beta curves
 - [ ] TensorBoard support
@@ -115,8 +113,8 @@ To install the project and start experimenting with diffusion models, follow the
 
 The different components of the project will be installed along with their dependencies. After that, you can start using the different components of the project, e.g.,
 ```python
-from core.schedulers import LinearNoiseScheduler
-scheduler = LinearNoiseScheduler()
+from core.schedulers import NoiseScheduler
+scheduler = NoiseScheduler()
 ```
 
 ---
