@@ -27,23 +27,22 @@ class TimeEncoding(nn.Module):
     current time step into the diffusion model.
     """
 
-    def __init__(self, dim: int = 320):
+    def __init__(self, dim: int = 1280):
         """
         __init__
 
         Initializes the TimeEncoding module.
 
         Args:
-            dim: The dimension of the output encoding. Must be even.
-                Note that the final output will have a dimension of 4 * dim
+            dim: The dimension of the output encoding. Must be divisible by 8.
         """
         super(TimeEncoding, self).__init__()
-        assert dim % 2 == 0, "dim must be an even integer"
+        assert dim % 8 == 0, "dim must be divisible by 8"
 
         self.dim = dim
 
-        self.linear1 = nn.Linear(dim, 4*dim, bias=True)
-        self.linear2 = nn.Linear(4*dim, 4*dim, bias=True)
+        self.linear1 = nn.Linear(dim//4, dim, bias=True)
+        self.linear2 = nn.Linear(dim, dim, bias=True)
         self.silu = nn.SiLU()
 
         self.register_buffer(
@@ -51,8 +50,8 @@ class TimeEncoding(nn.Module):
             torch.pow(
                 float(1e4),
                 -torch.arange(
-                    start = 0, end = dim // 2, dtype = torch.float32
-                ) / (dim // 2)
+                    start = 0, end = dim // 8, dtype = torch.float32
+                ) / (dim // 8)
             )
         )
 

@@ -45,19 +45,10 @@ This project aims to make generative diffusion approachable and powerful, offeri
 
 ---
 
-## 🎯 Features (Coming Soon)
-
-⏳ Coming soon
-
----
-
 ## 🔧 Built With
 
 [![Python][Python]][Python-url]
 [![Pytorch][PyTorch]][PyTorch-url]
-<!--
-* [![Vue][Vue.js]][Vue-url]
--->
 
 ---
 
@@ -73,6 +64,7 @@ This project aims to make generative diffusion approachable and powerful, offeri
   - [ ] Loss functions
 - [ ] Improve support for multi-resolution outputs
 - [ ] Add support for conditional diffusion (class labels, images, etc.)
+- [ ] Implement some utility functions to validate the configuration files
 
 ### 🧪 Training & Evaluation
 - [ ] Training loop with logging
@@ -95,7 +87,7 @@ This project aims to make generative diffusion approachable and powerful, offeri
 ### 🌐 Educational Material
 - [ ] High-level explanation in README
 - [ ] Notebooks: DDPM math & intuition
-- [ ] Tutorials: build your own DDPM from scratch
+- [ ] Tutorials: build and train your own DDPM from scratch
 
 ---
 
@@ -163,6 +155,7 @@ Here's a quick overview of the main components in this repository:
 | │   ├── `metrics.py`                  | Evaluation metrics like FID, PSNR                            |
 | │   └── `train.py`                    | Training loop orchestration                                  |
 | └── `utils/`                          | Utility functions                                            |
+|     ├── `config_utils.py`             | Configuration file utilities (check validity, etc.)          |
 |     ├── `logger.py`                   | Logging, experiment tracking                                 |
 |     └── `visualize.py`                | Visual tools for training or generation                      |
 | `LICENSE`                             | Project license (MIT)                                        |

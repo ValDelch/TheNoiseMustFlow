@@ -1,4 +1,4 @@
-# This YAML file defines the core architecture of the encoder for a Variational Autoencoder (VAE).
+# This YAML file defines the core architecture for a Variational Autoencoder (VAE).
 #
 # It uses reusable "blocks" as templates for convolutional, residual, and attention layers,
 # and then composes them into a sequence of "layers".
@@ -32,38 +32,38 @@ dropout: 0.1 # Dropout rate for regularization
 # Blocks are templates for layers that can be reused in the encoder and decoder.
 
 blocks:
-    simple_conv: # A template for a simple convolutional layer
-      type: conv
-      out_channels: $out
-      kernel_size: 3
-      padding: 1
-      padding_mode: 'zeros'
+  simple_conv: # A template for a simple convolutional layer
+    type: conv
+    out_channels: $out
+    kernel_size: 3
+    padding: 1
+    padding_mode: 'zeros'
 
-    down_conv: # A template for a downsampling convolutional layer
-      type: conv
-      out_channels: $out
-      kernel_size: 3
-      stride: 2
-      padding: 1
-      padding_mode: 'zeros'
+  down_conv: # A template for a downsampling convolutional layer
+    type: conv
+    out_channels: $out
+    kernel_size: 3
+    stride: 2
+    padding: 1
+    padding_mode: 'zeros'
 
-    up_conv: # A template for an upsampling convolutional layer
-      type: upsample
-      out_channels: $out
-      scale_factor: 2
-      mode: 'bilinear'
-      align_corners: True
+  up_conv: # A template for an upsampling convolutional layer
+    type: upsample
+    out_channels: $out
+    scale_factor: 2
+    mode: 'bilinear'
+    align_corners: True
 
-    ResBlock: # A template for a residual block
-      type: res
-      out_channels: $out
-      kernel_size: 3
-      padding: 1
-      padding_mode: 'zeros'
-      repeat: $n # Number of times the block is repeated
+  ResBlock: # A template for a residual block
+    type: res
+    out_channels: $out
+    kernel_size: 3
+    padding: 1
+    padding_mode: 'zeros'
+    repeat: $n # Number of times the block is repeated
 
-    AttBlock: # A template for an attention block
-      type: att
+  AttBlock: # A template for an attention block
+    type: att
 
 encoder:
   - use: simple_conv

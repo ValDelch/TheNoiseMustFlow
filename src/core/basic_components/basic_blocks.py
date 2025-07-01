@@ -87,7 +87,7 @@ class BasicResidualBlock(nn.Module):
         assert context.dim() == 2, "Conditioning tensor must be 2D (batch_size, d_context)"
         assert hasattr(self, 'context_proj'), "You must define a d_context to use conditioning projection"
 
-        context = self.context_proj(context)
+        context = self.context_proj(self.activation(context))
         return x + context.unsqueeze(-1).unsqueeze(-1)
 
     def forward(self, x: torch.Tensor, context: Optional[torch.Tensor] = None) -> torch.Tensor:

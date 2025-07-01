@@ -14,9 +14,9 @@ from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentio
 from core.basic_components.functional_blocks import (
     LayerNorm, MultiWaveletAct, SelfAttention, CrossAttention, GEGLU, Upsample
 )
-from core.basic_components.encoder_blocks import VAEncoderBlock
-from core.basic_components.decoder_blocks import VADecoderBlock
-from core.models import VAE
+from core.basic_components.encoder_blocks import VAEncoderBlock, UNetEncoderBlock
+from core.basic_components.decoder_blocks import VADecoderBlock, UNetDecoderBlock
+from core.models import VAE, UNet, Diffusion
 
 #
 # Tests for the schedulers
@@ -261,42 +261,42 @@ def test_ddim_invalid_step_divisor():
 # TimeEncoding
 
 def test_time_encoding_output_shape_batch():
-    dim = 320
+    dim = 1280
     model = TimeEncoding(dim=dim)
     t = torch.tensor([0, 1, 2, 3])
     out = model(t)
-    assert out.shape == (4, 4 * dim)
+    assert out.shape == (4, dim)
 
 def test_time_encoding_output_shape_single():
-    dim = 320
+    dim = 1280
     model = TimeEncoding(dim=dim)
     t = 5
     out = model(t)
-    assert out.shape == (1, 4 * dim)
+    assert out.shape == (1, dim)
 
 def test_time_encoding_invalid_negative_t():
-    model = TimeEncoding(dim=320)
+    model = TimeEncoding(dim=1280)
     t = -1
     with pytest.raises(AssertionError, match="t must be a non-negative integer"):
         model(t)
 
 def test_time_encoding_invalid_dim_odd():
-    with pytest.raises(AssertionError, match="dim must be an even integer"):
-        TimeEncoding(dim=321)
+    with pytest.raises(AssertionError, match="dim must be divisible by 8"):
+        TimeEncoding(dim=1281)
 
 def test_time_encoding_get_time_encoding_batch_shape():
     dim = 128
     model = TimeEncoding(dim=dim)
     t = torch.tensor([0, 1, 2])
     enc = model.get_time_encoding(t)
-    assert enc.shape == (3, dim)
+    assert enc.shape == (3, dim // 4)
 
 def test_time_encoding_get_time_encoding_single_shape():
     dim = 128
     model = TimeEncoding(dim=dim)
     t = 7
     enc = model.get_time_encoding(t)
-    assert enc.shape == (1, dim)
+    assert enc.shape == (1, dim // 4)
 
 def test_time_encoding_get_time_encoding_invalid_tensor_dim():
     model = TimeEncoding(dim=64)
@@ -825,6 +825,48 @@ def test_encoder_invalid_yaml_extension():
     with pytest.raises(AssertionError, match="must be a YAML file"):
         VAEncoderBlock(in_channels=1, config_file="config.txt")
 
+# UNetEncoderBlock
+
+# Fixture to locate your actual config file
+@pytest.fixture
+def default_unet_config_path():
+    here = os.path.dirname(__file__)
+    config_path = os.path.abspath(os.path.join(here, "..", "..", "configs", "default_UNet.yaml"))
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config file not found at: {config_path}")
+    return config_path
+
+def test_unet_encoder_instantiates_with_real_config(default_unet_config_path):
+    encoder = UNetEncoderBlock(
+        latent_dim=4,
+        config_file=default_unet_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    assert isinstance(encoder.encoder, nn.Sequential)
+
+def test_unet_encoder_forward_output_shape(default_unet_config_path):
+    encoder = UNetEncoderBlock(
+        latent_dim=4,
+        config_file=default_unet_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    x = torch.randn(2, 4, 32, 32)
+    context = torch.randn(2, 10, 768)
+    time = torch.randn(2, 1280)
+    out, skip = encoder(x, context=context, time=time)
+    assert isinstance(out, torch.Tensor)
+    assert isinstance(skip, list)
+
+def test_unet_encoder_invalid_config_path():
+    with pytest.raises(AssertionError, match="does not exist"):
+        UNetEncoderBlock(latent_dim=1, config_file="nonexistent.yaml")
+
+def test_unet_encoder_invalid_yaml_extension():
+    with pytest.raises(AssertionError, match="must be a YAML file"):
+        UNetEncoderBlock(latent_dim=1, config_file="config.txt")
+
 # VADecoderBlock
 
 def test_decoder_instantiates_with_real_config(default_config_path):
@@ -852,6 +894,52 @@ def test_decoder_invalid_config_path():
         VADecoderBlock(in_channels=1, config_file="nonexistent.yaml")
 
 def test_decoder_invalid_yaml_extension():
+    with pytest.raises(AssertionError, match="must be a YAML file"):
+        VADecoderBlock(in_channels=1, config_file="config.txt")
+
+# UNetDecoderBlock
+
+def test_unet_decoder_instantiates_with_real_config(default_unet_config_path):
+    decoder = UNetDecoderBlock(
+        latent_dim=4,
+        config_file=default_unet_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    assert isinstance(decoder.decoder, nn.Sequential)
+
+def test_unet_decoder_forward_output_shape(default_unet_config_path):
+    decoder = UNetDecoderBlock(
+        latent_dim=4,
+        config_file=default_unet_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    x = torch.randn(1, 1280, 4, 4)
+    context = torch.randn(1, 10, 768) # Example context tensor
+    time = torch.randn(1, 1280) # Example time tensor
+    skip_connections = [
+        torch.randn(1, 320, 32, 32),
+        torch.randn(1, 320, 32, 32),
+        torch.randn(1, 320, 32, 32),
+        torch.randn(1, 320, 16, 16),
+        torch.randn(1, 640, 16, 16),
+        torch.randn(1, 640, 16, 16),
+        torch.randn(1, 640, 8, 8),
+        torch.randn(1, 1280, 8, 8),
+        torch.randn(1, 1280, 8, 8),
+        torch.randn(1, 1280, 4, 4),
+        torch.randn(1, 1280, 4, 4),
+        torch.randn(1, 1280, 4, 4),
+    ]  # Example skip connections
+    out = decoder(x, context=context, time=time, skip_connections=skip_connections)
+    assert out.shape == (1, 4, 32, 32)
+
+def test_unet_decoder_invalid_config_path():
+    with pytest.raises(AssertionError, match="does not exist"):
+        VADecoderBlock(in_channels=1, config_file="nonexistent.yaml")
+
+def test_unet_decoder_invalid_yaml_extension():
     with pytest.raises(AssertionError, match="must be a YAML file"):
         VADecoderBlock(in_channels=1, config_file="config.txt")
 
@@ -901,3 +989,62 @@ def test_vae_forward_with_all(default_config_path):
     assert out.shape == noise.shape
     assert mean.shape == logvar.shape == noise.shape
     assert rec.shape == x.shape
+
+# UNet
+
+def test_unet_initialization(default_unet_config_path):
+    unet = UNet(
+        latent_dim=4,
+        config_file=default_unet_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+    assert isinstance(unet.encoder, nn.Module)
+    assert isinstance(unet.decoder, nn.Module)
+
+def test_unet_forward_output_shape(default_unet_config_path):
+    unet = UNet(
+        latent_dim=4,
+        config_file=default_unet_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock
+    )
+
+    x = torch.randn(2, 4, 32, 32)
+    context = torch.randn(2, 10, 768)  # Example context tensor
+    time = torch.randn(2, 1280)  # Example time tensor
+    out = unet(x, context=context, time=time)
+    assert isinstance(out, torch.Tensor)
+    assert out.shape == (2, 4, 32, 32)
+
+# Diffusion
+
+def test_diffusion_initialization(default_unet_config_path):
+    diffusion = Diffusion(
+        latent_dim=4,
+        d_time=1280,
+        config_file=default_unet_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock,
+        TimeEncoder=TimeEncoding
+    )
+    assert isinstance(diffusion.unet, UNet)
+    assert isinstance(diffusion.time_encoder, TimeEncoding)
+
+def test_diffusion_forward_output_shape(default_unet_config_path):
+    diffusion = Diffusion(
+        latent_dim=4,
+        d_time=1280,
+        config_file=default_unet_config_path,
+        ResidualBlock=BasicResidualBlock,
+        AttentionBlock=BasicAttentionBlock,
+        TimeEncoder=TimeEncoding
+    )
+
+    x = torch.randn(2, 4, 32, 32)
+    context = torch.randn(2, 10, 768)  # Example context tensor
+    time = torch.tensor([756, 123])  # Example time tensor
+    out = diffusion(x, t=time, context=context)
+    assert isinstance(out, torch.Tensor)
+    assert out.shape == (2, 4, 32, 32)
+

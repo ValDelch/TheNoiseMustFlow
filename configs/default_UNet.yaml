@@ -1,0 +1,176 @@
+# This YAML file defines the core architecture for a U-Net model.
+#
+# It uses reusable "blocks" as templates for convolutional, residual, and attention layers,
+# and then composes them into a sequence of "layers".
+#
+# The decoder will always be followed by a group normalization layer, an activation function,
+# and one convolutional layers to produce the final output, aka the latent representation.
+#
+# The goal is to keep the architecture flexible and modular, allowing quick changes
+# by modifying only this file.
+
+# Blocks define reusable layer templates with parameter placeholders like $out and $n.
+# These are substituted using values in the 'with' section of each layer.
+# Layer types:
+# - conv: standard 2D convolution
+# - res: residual block (user-defined implementation)
+# - att: attention block (user-defined implementation)
+
+# Required global parameters (num_heads can be omitted if not using attention blocks):
+
+latent_dim: 4 # The latent dimension of the VAE, which is the output of the encoder
+d_time: 1280 # The dimension of the time embedding (for the residual blocks)
+d_context: 768 # The dimension of the context embedding (for the attention blocks)
+num_heads: 8 # Number of attention heads for attention blocks
+activation: SiLU # Activation function to be used in the residual blocks and at the end of the encoder
+groups: 32 # Number of groups for group normalization
+dropout: 0.1 # Dropout rate for regularization
+
+# Blocks are templates for layers that can be reused in the encoder and decoder.
+
+blocks:
+  simple_conv: # A template for a simple convolutional layer
+    type: conv
+    out_channels: $out
+    kernel_size: 3
+    padding: 1
+    padding_mode: 'zeros'
+
+  down_conv: # A template for a downsampling convolutional layer
+    type: conv
+    out_channels: $out
+    kernel_size: 3
+    stride: 2
+    padding: 1
+    padding_mode: 'zeros'
+
+  up_conv: # A template for an upsampling convolutional layer
+    type: upsample
+    out_channels: $out
+    scale_factor: 2
+    mode: 'bilinear'
+    align_corners: True
+
+  ResBlock: # A template for a residual block
+    type: res
+    skip_channels: $in # Input channels that will be added to the input by the skip connection
+    out_channels: $out
+    kernel_size: 3
+    padding: 1
+    padding_mode: 'zeros'
+    repeat: $n # Number of times the block is repeated
+
+  AttBlock: # A template for an attention block
+    type: att
+
+  ResAndAttBlock: # A template for a residual block followed by an attention block
+    type: res_and_att
+    skip_channels: $in # Input channels that will be added to the input by the skip connection
+    out_channels: $out
+    kernel_size: 3
+    padding: 1
+    padding_mode: 'zeros'
+    repeat: $n # Number of times the block is repeated
+
+encoder:
+  - use: simple_conv # skip connections (+1) v
+    with:
+      out: 320
+
+  - use: ResAndAttBlock # skip connections (+2) v
+    with:
+      in: 0
+      out: 320
+      n: 2
+
+  - use: down_conv # skip connections (+1) v
+    with:
+      out: 320
+
+  - use: ResAndAttBlock # skip connections (+2) v
+    with:
+      in: 0
+      out: 640
+      n: 2
+
+  - use: down_conv # skip connections (+1) v
+    with:
+      out: 640
+
+  - use: ResAndAttBlock # skip connections (+2) v
+    with:
+      in: 0
+      out: 1280
+      n: 2
+
+  - use: down_conv # skip connections (+1) v
+    with:
+      out: 1280
+
+  - use: ResBlock # skip connections (+2) v
+    with:
+      in: 0
+      out: 1280
+      n: 2
+
+bottleneck:
+  - use: ResAndAttBlock
+    with:
+      in: 0
+      out: 1280
+      n: 1
+
+  - use: ResBlock
+    with:
+      in: 0
+      out: 1280
+      n: 1
+
+decoder:
+  - use: ResBlock # skip connections (-3)
+    with:
+      in: 1280
+      out: 1280
+      n: 3
+
+  - use: up_conv
+    with:
+      out: 1280
+
+  - use: ResAndAttBlock # skip connections (-2)
+    with:
+      in: 1280
+      out: 1280
+      n: 2
+
+  - use: ResAndAttBlock # skip connections (-1)
+    with:
+      in: 640
+      out: 1280
+      n: 1
+
+  - use: up_conv
+    with:
+      out: 1280
+
+  - use: ResAndAttBlock # skip connections (-2)
+    with:
+      in: 640
+      out: 640
+      n: 2
+
+  - use: ResAndAttBlock # skip connections (-1)
+    with:
+      in: 320
+      out: 640
+      n: 1
+
+  - use: up_conv
+    with:
+      out: 640
+
+  - use: ResAndAttBlock # skip connections (-3)
+    with:
+      in: 320
+      out: 320
+      n: 3
