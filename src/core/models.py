@@ -19,6 +19,7 @@ from core.basic_components.encoder_blocks import VAEncoderBlock, UNetEncoderBloc
 from core.basic_components.decoder_blocks import VADecoderBlock, UNetDecoderBlock
 from core.basic_components.encodings import TimeEncoding
 
+
 # Type alias
 TensorOrMore = Union[
     torch.Tensor,

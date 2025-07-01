@@ -19,7 +19,6 @@ from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentio
 from core.basic_components.functional_blocks import Upsample
 
 
-
 class VADecoderBlock(nn.Module):
     """
     The decoder path of a basic Variational Autoencoder (VAE) architecture.

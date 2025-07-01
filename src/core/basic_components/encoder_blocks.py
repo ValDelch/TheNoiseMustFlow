@@ -17,6 +17,7 @@ from torch import nn
 
 from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
 
+
 # Type alias
 TensorOrMore = Union[
     torch.Tensor,
