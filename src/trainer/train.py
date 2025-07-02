@@ -24,22 +24,34 @@ def print_epoch_summary(epoch: int, epochs: int, current_lr: float,
     """
     Utility function to print the summary of the training epoch.
     """
-    line = "═" * 60
-    print(f"\n╔{line}╗")
-    print(f"║ Epoch {epoch+1}/{epochs:<51}║")
-    print(f"╠{line}╣")
-    print(f"║ Learning Rate         : {current_lr:<35.2e}║")
-    print(f"║{' '*60}║")
-    print(f"║ Total Train Loss      : {sum(train_losses.values()):<35.3e}║")
+    box_width = 60
+    line = "═" * box_width
+    content_width = box_width - 2  # account for border characters
+
+    def format_line(content: str = "") -> str:
+        return f"║ {content:<{content_width - 1}}║"
+
+    def format_kv(key: str, value: str) -> str:
+        if len(key) > 20:
+            key = key[:20] + "..."
+        text = f"{key:<25}: {value:>28}"
+        return format_line(text[:content_width - 1])  # Trim if necessary
+
+    print(f"\n╔{line[:-2]}╗")
+    print(format_line(f"Epoch {epoch + 1}/{epochs}"))
+    print(f"╠{line[:-2]}╣")
+    print(format_kv("Learning Rate", f"{current_lr:.2e}"))
+    print(format_line())
+    print(format_kv("Total Train Loss", f"{sum(train_losses.values()):.3e}"))
     for k, v in train_losses.items():
-        print(f"║   • Train {k:<12}: {v:<35.6f}║")
-    print(f"║{' '*60}║")
-    print(f"║ Total Test Loss       : {sum(test_losses.values()):<35.3e}║")
+        print(format_kv(f"• Train {k}", f"{v:.6f}"))
+    print(format_line())
+    print(format_kv("Total Test Loss", f"{sum(test_losses.values()):.3e}"))
     for k, v in test_losses.items():
-        print(f"║   • Test {k:<13}: {v:<35.6f}║")
-    print(f"║{' '*60}║")
-    print(f"║ Best Test Loss        : {best_loss:<35.3e}║")
-    print(f"╚{line}╝\n")
+        print(format_kv(f"• Test {k}", f"{v:.6f}"))
+    print(format_line())
+    print(format_kv("Best Test Loss", f"{best_loss:.3e}"))
+    print(f"╚{line[:-2]}╝\n")
 
 def write_tensorboard_summary(writer: SummaryWriter, epoch: int, current_lr: float,
                               train_losses: dict[str, float], test_losses: dict[str, float]) -> None:
