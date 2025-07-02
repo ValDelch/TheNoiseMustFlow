@@ -66,7 +66,8 @@ This project aims to make generative diffusion approachable and powerful, offeri
 - [ ] Implement some utility functions to validate the configuration files
 
 ### 🧪 Training & Evaluation
-- [ ] Training loop with logging
+- [x] VAE Training loop
+- [x] Diffusion model training loop
 - [ ] Metrics: loss, FID, PSNR
 - [ ] Checkpointing & resume
 - [ ] Support for distributed training
@@ -133,6 +134,11 @@ Here's a quick overview of the main components in this repository:
 | `notebooks/`                          | Jupyter notebooks for tutorials and mathematical insights    |
 | ├── `__a__Noise_Schedulers.ipynb`     | Notebook introducing the Noise Schedulers                    |
 | └── `__b__Samplers.ipynb`             | Notebook introducing the Samplers                            |
+| `examples/`                           | Example scripts for training and inference                   |
+| └── `MNIST/`                          | Example training script for MNIST dataset                    |
+|     ├── `MNIST_VAE.yaml`              | Configuration for VAE on MNIST                               |
+|     ├── `MNIST_UNet.yaml`             | Configuration for U-Net on MNIST                             |            
+|     └── `train_mnist.py`              | Script to train a diffusion model on MNIST                   |
 | `src/`                                | Root source folder for all Python modules                    |
 | ├── `core/`                           | Core logic for diffusion models and sampling                 |
 | │   ├── `basic_components/`           | Modular low-level building blocks for models                 |
@@ -149,6 +155,7 @@ Here's a quick overview of the main components in this repository:
 | │   └── `train_ddpm.py`               | Command-line entry point to train DDPM                       |
 | ├── `tests/`                          | Unit tests for validating modules                            |
 | ├── `trainer/`                        | Training workflows and evaluation tools                      |
+| │   ├── `custom_lr_scheduler.py`      | Custom learning rate schedulers                              |
 | │   ├── `losses.py`                   | Loss functions used during training                          |
 | │   ├── `metrics.py`                  | Evaluation metrics like FID, PSNR                            |
 | │   └── `train.py`                    | Training loop orchestration                                  |

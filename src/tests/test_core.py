@@ -966,7 +966,7 @@ def test_unet_decoder_invalid_yaml_extension():
 
 def test_vae_initialization(default_config_path):
     vae = VAE(
-        in_channels=1,
+        input_shape=(1, 32, 32),
         config_file=default_config_path,
         ResidualBlock=BasicResidualBlock,
         AttentionBlock=BasicAttentionBlock
@@ -975,7 +975,7 @@ def test_vae_initialization(default_config_path):
     assert isinstance(vae.decoder, nn.Module)
 
 def test_vae_forward_basic(default_config_path):
-    vae = VAE(1, default_config_path, BasicResidualBlock, BasicAttentionBlock)
+    vae = VAE((1, 32, 32), default_config_path, BasicResidualBlock, BasicAttentionBlock)
     x = torch.randn(4, 1, 32, 32)
     noise = torch.randn(4, 4, 4, 4)  # Match latent dim
     out = vae(x, noise)
@@ -983,7 +983,7 @@ def test_vae_forward_basic(default_config_path):
     assert out.shape == noise.shape
 
 def test_vae_forward_with_stats(default_config_path):
-    vae = VAE(1, default_config_path, BasicResidualBlock, BasicAttentionBlock)
+    vae = VAE((1, 32, 32), default_config_path, BasicResidualBlock, BasicAttentionBlock)
     x = torch.randn(2, 1, 32, 32)
     noise = torch.randn(2, 4, 4, 4)
     out, (mean, logvar) = vae(x, noise, return_stats=True)
@@ -992,7 +992,7 @@ def test_vae_forward_with_stats(default_config_path):
     assert logvar.shape == noise.shape
 
 def test_vae_forward_with_rec(default_config_path):
-    vae = VAE(1, default_config_path, BasicResidualBlock, BasicAttentionBlock)
+    vae = VAE((1, 32, 32), default_config_path, BasicResidualBlock, BasicAttentionBlock)
     x = torch.randn(2, 1, 32, 32)
     noise = torch.randn(2, 4, 4, 4)
     out, rec = vae(x, noise, return_rec=True)
@@ -1001,14 +1001,14 @@ def test_vae_forward_with_rec(default_config_path):
     assert rec.shape[2:] == x.shape[2:]
 
 def test_vae_forward_with_all(default_config_path):
-    vae = VAE(1, default_config_path, BasicResidualBlock, BasicAttentionBlock)
+    vae = VAE((1, 16, 16), default_config_path, BasicResidualBlock, BasicAttentionBlock)
     x = torch.randn(1, 1, 16, 16)
     noise = torch.randn(1, 4, 2, 2)
     out, (mean, logvar), rec = vae(x, noise, return_stats=True, return_rec=True)
     assert out.shape == noise.shape
     assert mean.shape == logvar.shape == noise.shape
     assert rec.shape == x.shape
-
+        
 # UNet
 
 def test_unet_initialization(default_unet_config_path):
@@ -1041,7 +1041,6 @@ def test_unet_forward_output_shape(default_unet_config_path):
 def test_diffusion_initialization(default_unet_config_path):
     diffusion = Diffusion(
         latent_dim=4,
-        d_time=1280,
         config_file=default_unet_config_path,
         ResidualBlock=BasicResidualBlock,
         AttentionBlock=BasicAttentionBlock,
@@ -1053,7 +1052,6 @@ def test_diffusion_initialization(default_unet_config_path):
 def test_diffusion_forward_output_shape(default_unet_config_path):
     diffusion = Diffusion(
         latent_dim=4,
-        d_time=1280,
         config_file=default_unet_config_path,
         ResidualBlock=BasicResidualBlock,
         AttentionBlock=BasicAttentionBlock,
@@ -1066,4 +1064,3 @@ def test_diffusion_forward_output_shape(default_unet_config_path):
     out = diffusion(x, t=time, context=context)
     assert isinstance(out, torch.Tensor)
     assert out.shape == (2, 4, 32, 32)
-

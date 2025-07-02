@@ -1,5 +1,10 @@
 .venv
+
 .pytest-cache
 __pycache__/
 *.egg-info/
 build/
+
+data/
+
+*.pth

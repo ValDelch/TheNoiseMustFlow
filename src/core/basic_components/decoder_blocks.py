@@ -33,7 +33,7 @@ class VADecoderBlock(nn.Module):
         Initializes the decoding path of a VAE architecture.
 
         Args:
-            in_channels: Number of input channels, defaults to 1.
+            in_channels: Number of input channels.
             config_file: Path to a YAML configuration file for the decoder block.
             ResidualBlock: Class for the residual block, defaults to BasicResidualBlock.
             AttentionBlock: Class for the attention block, defaults to BasicAttentionBlock.
@@ -259,6 +259,8 @@ class UNetDecoderBlock(nn.Module):
         assert config["d_context"] > 0, "d_context must be > 0"
         assert config["num_heads"] > 0, "num_heads must be > 0"
         assert 0 <= config["dropout"] <= 1, "dropout must be in [0, 1]"
+
+        self.d_time = int(config["d_time"])
 
         # Validate activation function
         act_string = config["activation"]
