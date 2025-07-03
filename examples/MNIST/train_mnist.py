@@ -193,11 +193,11 @@ if __name__ == "__main__":
 
         losses = [
             {
-                "loss_name": "mse_loss", #"snr_weighted_mse_loss",
-                "callable": mse_loss, #snr_weighted_mse_loss,
+                "loss_name": "snr_weighted_mse_loss",
+                "callable": snr_weighted_mse_loss,
                 "weight": 1.0,
                 "kwargs": {
-                    #"gamma": 5.0,
+                    "gamma": 5.0,
                     "reduction": "sum"
                 }
             }

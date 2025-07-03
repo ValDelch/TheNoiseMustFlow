@@ -683,7 +683,7 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
             # Sampling with DDIM
 
             sampler = DDIMSampler(
-                noise_scheduler=noise_scheduler, steps=50, eta=0.1, use_tqdm=False
+                noise_scheduler=noise_scheduler, steps=50, eta=0.2, use_tqdm=False
             ).to(device)
             x = torch.randn((1, *vae.latent_shape), device=device)
 
