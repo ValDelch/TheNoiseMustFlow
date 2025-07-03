@@ -184,11 +184,10 @@ class VADecoderBlock(nn.Module):
         """
         assert x.dim() == 4, "Input tensor must be 4D (batch_size, latent_dim, height', width')"
 
-        x = self.decoder(x)
-
         if rescale:
-            return x / 0.18215
-        return x
+            x = x / 0.18215
+        
+        return self.decoder(x)
     
 class UNetDecoderBlock(nn.Module):
     """
