@@ -27,7 +27,7 @@ from MNIST import MNIST
 from core.models import VAE, Diffusion
 from core.schedulers import NoiseScheduler
 from trainer.custom_lr_schedulers import CosineLRScheduler
-from trainer.losses import VAE_loss, snr_weighted_mse_loss
+from trainer.losses import VAE_loss, snr_weighted_mse_loss, mse_loss
 from trainer.train import train_vae, train_diffusion
 
 
@@ -52,11 +52,11 @@ if __name__ == "__main__":
                         help="Flag to indicate whether to use tqdm for progress bars")
     parser.add_argument("--use_tensorboard", type=bool, default=True,
                         help="Flag to indicate whether to use TensorBoard for logging")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility")
     
                         
     # Data loader parameters
-    parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=256, help="Batch size")
     parser.add_argument("--num_workers", type=int, default=4, help="Number of workers for data loading")
 
     # Noise scheduler parameters
@@ -66,24 +66,19 @@ if __name__ == "__main__":
     parser.add_argument("--schedule", type=str, choices=["linear", "cosine", "quadratic", "sigmoid", "geometric"],
                         default="cosine", help="Type of noise schedule to use")
 
-    # Sampler parameters
-    parser.add_argument("--sampler", type=str, choices=["DDPM", "DDIM"], default="DDPM",
-                        help="Type of sampler to use for the diffusion model")
-    parser.add_argument("--sampling_steps", type=int, default=50, help="Number of sampling steps for DDIM")
-
     # Optimizer parameters for VAE
-    parser.add_argument("--vae_epochs", type=int, default=10, help="Number of training epochs")
+    parser.add_argument("--vae_epochs", type=int, default=30, help="Number of training epochs")
     parser.add_argument("--vae_lr", type=float, default=1e-4, help="Learning rate")
     parser.add_argument("--vae_warmup", type=str, choices=["none", "cosine"], default="cosine", 
                         help="Type of warmup scheduler to use")
-    parser.add_argument("--vae_warmup_steps", type=int, default=3, help="Number of warmup steps for the scheduler")
+    parser.add_argument("--vae_warmup_steps", type=int, default=10, help="Number of warmup steps for the scheduler")
 
     # Optimizer parameters for diffusion model
     parser.add_argument("--diffusion_epochs", type=int, default=50, help="Number of training epochs for diffusion model")
     parser.add_argument("--diffusion_lr", type=float, default=2e-5, help="Learning rate for diffusion model")
     parser.add_argument("--diffusion_warmup", type=str, choices=["none", "cosine"], default="cosine", 
                         help="Type of warmup scheduler to use for diffusion model")
-    parser.add_argument("--diffusion_warmup_steps", type=int, default=10, 
+    parser.add_argument("--diffusion_warmup_steps", type=int, default=20, 
                         help="Number of warmup steps for the diffusion model scheduler")
 
     args = parser.parse_args()
@@ -97,7 +92,7 @@ if __name__ == "__main__":
         checkpoint_folder = args.checkpoint_folder
 
     # 1. Load the MNIST dataset and create a data loader
-    dataset = MNIST(root='./data', train=True, download=True)
+    dataset = MNIST(root='./data', train=True, download=True, unconditional=True, d_context=128)
     train_dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, 
                                   num_workers=args.num_workers, drop_last=True, pin_memory=True)
     test_dataloader = DataLoader(MNIST(root='./data', train=False, download=True), 
@@ -183,7 +178,10 @@ if __name__ == "__main__":
 
         print(f"[INFO] Resumed diffusion training from epoch {start_epoch} with best loss {best_loss:.4f}.\n")
     else:
-        optimizer = torch.optim.Adam(diffusion.parameters(), lr=args.diffusion_lr)
+        optimizer = torch.optim.Adam(
+            diffusion.parameters(), 
+            lr=args.diffusion_lr
+        )
 
         if args.diffusion_warmup == "cosine":
             scheduler = CosineLRScheduler(
@@ -195,12 +193,12 @@ if __name__ == "__main__":
 
         losses = [
             {
-                "loss_name": "snr_weighted_mse_loss",
-                "callable": snr_weighted_mse_loss,
+                "loss_name": "mse_loss", #"snr_weighted_mse_loss",
+                "callable": mse_loss, #snr_weighted_mse_loss,
                 "weight": 1.0,
                 "kwargs": {
-                    "gamma": 5.0,
-                    "reduction": "mean"
+                    #"gamma": 5.0,
+                    "reduction": "sum"
                 }
             }
         ]

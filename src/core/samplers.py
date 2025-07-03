@@ -19,6 +19,8 @@ while DDIM can sample with fewer steps, allowing for faster generation of sample
 from __future__ import annotations
 from typing import Union, Callable, Optional
 
+from tqdm import tqdm
+
 import torch
 
 from core.schedulers import NoiseScheduler
@@ -37,7 +39,7 @@ class DDPMSampler(torch.nn.Module):
     indexes in a monotonically decreasing manner.
     """
 
-    def __init__(self, noise_scheduler: NoiseScheduler):
+    def __init__(self, noise_scheduler: NoiseScheduler, use_tqdm: bool = True):
         """
         __init__
 
@@ -45,10 +47,14 @@ class DDPMSampler(torch.nn.Module):
 
         Args:
             noise_scheduler: An instance of NoiseScheduler that defines the noise schedule.
+            use_tqdm: If True, uses tqdm for progress bars during sampling.
+                Default is True.
         """
         super(DDPMSampler, self).__init__()
         assert isinstance(noise_scheduler, NoiseScheduler), \
             "noise_scheduler must be an instance of NoiseScheduler"
+        
+        self.use_tqdm = use_tqdm
 
         self.steps = noise_scheduler.steps
         self.alphas = noise_scheduler.alphas
@@ -81,7 +87,7 @@ class DDPMSampler(torch.nn.Module):
         self._validate_xt(x, t)
 
         if t != 0:
-            z = torch.randn(x.shape, generator=self.generator)
+            z = torch.randn(x.shape, generator=self.generator, device=x.device)
 
             mean = (1./ torch.sqrt(self.alphas[t])) * (x - (self.betas[t] / torch.sqrt(1. - self.alphas_cumprod[t])) * pred_noise)
             var = ((1. - self.alphas_cumprod[t-1]) / (1. - self.alphas_cumprod[t])) * self.betas[t]
@@ -91,7 +97,7 @@ class DDPMSampler(torch.nn.Module):
         else:
             return (x - torch.sqrt(1. - self.alphas_cumprod[t]) * pred_noise) / torch.sqrt(self.alphas_cumprod[t])
     
-    def sample(self, x: torch.Tensor, pred_noise_func: Callable, t: Optional[int] = None, 
+    def sample(self, x: torch.Tensor, pred_noise_func: Callable, func_inputs: dict = {},
                return_intermediates: bool = False, return_step: int = 50) -> Union[torch.Tensor, list[torch.Tensor]]:
         """
         sample
@@ -99,28 +105,31 @@ class DDPMSampler(torch.nn.Module):
         Samples from x_{t} to x_{0} by executing the reverse process
         with the provided pred_noise_func.
 
+        The current timestep is assumed starting for the beginning (t=steps-1).
+
         Args:
             x: The current sample tensor.
                 (batch_size, channels, height, width) or (channels, height, width)
             pred_noise_func: A callable that takes x and t, and returns the predicted noise.
-            t: The current timestep. If None, assumes starting for the beginning (t=steps-1).
+            func_inputs: Optional additional inputs to the pred_noise_func (other than x and t).
             return_intermediates: If True, returns intermediate samples at each step.
             return_step: The step at which to return the intermediate sample if return_intermediates is True.
                 Otherwise, it is ignored.
 
         Returns:
             The final sample tensor after sampling from x_{t} to x_{0}.
-                (batch_size, channels, height, width) or (channels, height, width)
         """
         assert callable(pred_noise_func), "pre_noise_func must be a callable that takes x and t"
-        if t is None:
-            t = self.steps - 1
-        self._validate_xt(x, t)
+        self._validate_xt(x, self.steps - 1)
 
         # Sample from x_{t} to x_{0}
         intermediates = []
-        for step in reversed(range(t + 1)):
-            pred_noise = pred_noise_func(x, step)
+        pbar = tqdm(range(self.steps), desc="Sampling", disable=not self.use_tqdm)
+        for step in reversed(pbar): # steps-1, ..., 1, 0
+            with torch.no_grad():
+                pred_noise = pred_noise_func(
+                    x, torch.tensor([step], device=x.device), **func_inputs
+                )
             x = self.sample_prev_step(x, step, pred_noise)
             if return_intermediates and step % return_step == 0:
                 intermediates.append(x.clone())
@@ -155,7 +164,7 @@ class DDIMSampler(torch.nn.Module):
     """
 
     def __init__(self, noise_scheduler: NoiseScheduler, steps: int = 50,
-                 eta: float = 0.0):
+                 eta: float = 0.0, use_tqdm: bool = True):
         """
         __init__
 
@@ -166,12 +175,16 @@ class DDIMSampler(torch.nn.Module):
             steps: The number of steps to sample. Default is 50.
             eta: Controls stochasticity. Default is 0.0 (deterministic sampling).
                 eta=1 approaches DDPM sampling.
+            use_tqdm: If True, uses tqdm for progress bars during sampling.
+                Default is True.
         """
         super(DDIMSampler, self).__init__()
         assert isinstance(noise_scheduler, NoiseScheduler), \
             "noise_scheduler must be an instance of NoiseScheduler"
         assert noise_scheduler.steps % steps == 0, \
             "steps must be a divisor of noise_scheduler.steps"
+        
+        self.use_tqdm = use_tqdm
 
         self.steps = steps
         self.steps_list = list(range(0, noise_scheduler.steps, noise_scheduler.steps // steps))
@@ -217,7 +230,7 @@ class DDIMSampler(torch.nn.Module):
             # Compute the direction pointing to x_{t-1}
             sigma_t = self.eta * torch.sqrt((1. - alphas_cumprod_t_prev) / (1. - alphas_cumprod_t) * \
                 (1. - alphas_cumprod_t / alphas_cumprod_t_prev))
-            noise = torch.randn(x.shape, generator=self.generator) if self.eta > 0 else 0.0
+            noise = torch.randn(x.shape, generator=self.generator, device=x.device) if self.eta > 0 else 0.0
             
             return torch.sqrt(alphas_cumprod_t_prev) * x0_pred + \
                 torch.sqrt(1. - alphas_cumprod_t_prev - sigma_t**2) * pred_noise + \
@@ -225,7 +238,7 @@ class DDIMSampler(torch.nn.Module):
         else:
             return x0_pred
     
-    def sample(self, x: torch.Tensor, pred_noise_func: Callable, t: Optional[int] = None, 
+    def sample(self, x: torch.Tensor, pred_noise_func: Callable, func_inputs: dict = {},
                return_intermediates: bool = False, return_step: int = 1) -> Union[torch.Tensor, list[torch.Tensor]]:
         """
         sample
@@ -237,25 +250,25 @@ class DDIMSampler(torch.nn.Module):
             x: The current sample tensor.
                 (batch_size, channels, height, width) or (channels, height, width)
             pred_noise_func: A callable that takes x and t, and returns the predicted noise.
-            t: The current timestep, 0 < t < steps, e.g., 0, 1, ..., 49 (zero-indexed).
-                If None, assumes starting for the beginning (t=steps-1).
+            func_inputs: Optional additional inputs to the pred_noise_func (other than x and t).
             return_intermediates: If True, returns intermediate samples at each step.
             return_step: The step at which to return the intermediate sample if return_intermediates is True.
                 Otherwise, it is ignored.
 
         Returns:
             The final sample tensor after sampling from x_{t} to x_{0}.
-                (batch_size, channels, height, width) or (channels, height, width)
         """
         assert callable(pred_noise_func), "pre_noise_func must be a callable that takes x and t"
-        if t is None:
-            t = self.steps - 1
-        self._validate_xt(x, t)
+        self._validate_xt(x, self.steps - 1)
 
         # Sample from x_{t} to x_{0}
         intermediates = []
-        for step in reversed(range(t + 1)):
-            pred_noise = pred_noise_func(x, step)
+        pbar = tqdm(range(self.steps), desc="Sampling", disable=not self.use_tqdm)
+        for step in reversed(pbar): # steps-1, ..., 1, 0
+            with torch.no_grad():
+                pred_noise = pred_noise_func(
+                    x, torch.tensor([self.steps_list[step]], device=x.device), **func_inputs
+                )
             x = self.sample_prev_step(x, step, pred_noise)
             if return_intermediates and step % return_step == 0:
                 intermediates.append(x.clone())

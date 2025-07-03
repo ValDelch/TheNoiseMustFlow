@@ -6,14 +6,18 @@ This module implements the training loops for the VAE and diffusion model.
 
 
 from __future__ import annotations
-from typing import Callable, Optional, Type
+from typing import Optional
 
 import os
 from tqdm import tqdm
 
 import torch
-from torch import nn
 from torch.utils.tensorboard import SummaryWriter
+
+from core.models import VAE, Diffusion
+
+from core.schedulers import NoiseScheduler
+from core.samplers import DDPMSampler, DDIMSampler
 
 import matplotlib.pyplot as plt
 
@@ -143,12 +147,12 @@ def compute_loss(loss_fn_inputs: dict, losses: list[dict]) -> dict:
         
     return _loss
 
-def train_vae(vae: nn.Module, train_dataloader: torch.utils.data.DataLoader,
+def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
               test_dataloader: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer,
               losses: list[dict], epochs: int,  scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
               checkpoint_folder: str = "./checkpoints", use_tqdm: bool = False, use_tensorboard: bool = False, 
               validation: bool = True, seed: Optional[int] = None,
-              device: str = "cuda" if torch.cuda.is_available() else "cpu", return_model: bool = False) -> Optional[nn.Module]:
+              device: str = "cuda" if torch.cuda.is_available() else "cpu", return_model: bool = False) -> Optional[VAE]:
     """
     Train the VAE model.
 
@@ -323,7 +327,7 @@ def train_vae(vae: nn.Module, train_dataloader: torch.utils.data.DataLoader,
                 images, noise, return_stats=False, rescale=False, return_rec=True
             )
 
-            num_samples = images.size(0)
+            num_samples = min(32, images.size(0))
             cmap = 'gray' if images.size(1) == 1 else None
 
             fig, axes = plt.subplots(num_samples, 2, figsize=(10, 5 * num_samples))
@@ -353,12 +357,12 @@ def train_vae(vae: nn.Module, train_dataloader: torch.utils.data.DataLoader,
     if return_model:
         return vae
     
-def train_diffusion(diffusion: nn.Module, noise_scheduler: nn.Module, train_dataloader: torch.utils.data.DataLoader, 
+def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train_dataloader: torch.utils.data.DataLoader, 
                     test_dataloader: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer, losses: list[dict], 
-                    epochs: int, vae: Optional[nn.Module] = None, scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+                    epochs: int, vae: Optional[VAE] = None, scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
                     checkpoint_folder: str = "./checkpoints", use_tqdm: bool = False, use_tensorboard: bool = False, 
                     validation: bool = True, seed: Optional[int] = None,
-                    device: str = "cuda" if torch.cuda.is_available() else "cpu", return_model: bool = False) -> Optional[nn.Module]:
+                    device: str = "cuda" if torch.cuda.is_available() else "cpu", return_model: bool = False) -> Optional[Diffusion]:
     """
     Train the diffusion model.
 
@@ -438,9 +442,10 @@ def train_diffusion(diffusion: nn.Module, noise_scheduler: nn.Module, train_data
             if vae is not None:
                 images = batch['image'].to(device)
                 noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
-                latent_images = vae(
-                    images, noise, return_stats=False, rescale=True, return_rec=False
-                )
+                with torch.no_grad():
+                    latent_images = vae(
+                        images, noise, return_stats=False, rescale=True, return_rec=False
+                    )
             else:
                 latent_images = batch['image'].to(device)
 
@@ -529,7 +534,7 @@ def train_diffusion(diffusion: nn.Module, noise_scheduler: nn.Module, train_data
 
                 # Update the testing losses
                 for k, v in _loss.items():
-                    test_losses[k] += v / len(test_dataloader)
+                    test_losses[k] += v.item() / len(test_dataloader)
 
         # Update the scheduler if it exists
         tot_test_loss = sum(test_losses.values())
@@ -571,6 +576,9 @@ def train_diffusion(diffusion: nn.Module, noise_scheduler: nn.Module, train_data
             continue
 
         with torch.no_grad():
+
+            # Noise prediction
+
             batch = next(iter(test_dataloader))
             contexts = batch['context'].to(device)
             if vae is not None:
@@ -599,7 +607,7 @@ def train_diffusion(diffusion: nn.Module, noise_scheduler: nn.Module, train_data
                 noisy_images, t, contexts
             )
 
-            num_samples = images.size(0)
+            num_samples = min(32, images.size(0))
             cmap = 'gray'
 
             noise = noise.mean(dim=1, keepdim=False) # Mean across channels for visualization
@@ -628,9 +636,81 @@ def train_diffusion(diffusion: nn.Module, noise_scheduler: nn.Module, train_data
 
             plt.tight_layout()
 
-        if use_tensorboard:
-            writer.add_figure('Diffusion Predicted Noise', fig, global_step=epoch)
-            plt.close(fig)
+            if use_tensorboard:
+                writer.add_figure('Diffusion Predicted Noise', fig, global_step=epoch)
+                plt.close(fig)
+
+            # Sampling with DDPM
+
+            if vae is None:
+                continue
+
+            if images.size(1) == 1:
+                cmap = 'gray'
+            elif images.size(1) == 3:
+                cmap = None
+            else:
+                continue
+
+            sampler = DDPMSampler(noise_scheduler=noise_scheduler, use_tqdm=False).to(device)
+            x = torch.randn((1, *vae.latent_shape), device=device)
+
+            sampled_latent = sampler.sample(
+                x,
+                pred_noise_func=diffusion,
+                func_inputs={'context': contexts[i, None]},
+                return_intermediates=True,
+                return_step=noise_scheduler.steps // 100
+            )
+            generated_images = vae.decoder(
+                torch.cat(sampled_latent, dim=0), rescale=True
+            )
+
+            fig, axes = plt.subplots(1, 10, figsize=(10 * 5, 5))
+            for i in range(10):
+                axes[i].imshow(
+                    generated_images[i].cpu().numpy().transpose(1, 2, 0), cmap=cmap
+                )
+                axes[i].set_title(f"DDPM Generated Image {i+1}")
+                axes[i].axis('off')
+        
+            plt.tight_layout()
+
+            if use_tensorboard:
+                writer.add_figure('DDPM Generated Images', fig, global_step=epoch)
+                plt.close(fig)
+
+            # Sampling with DDIM
+
+            sampler = DDIMSampler(
+                noise_scheduler=noise_scheduler, steps=50, eta=0.1, use_tqdm=False
+            ).to(device)
+            x = torch.randn((1, *vae.latent_shape), device=device)
+
+            sampled_latent = sampler.sample(
+                x,
+                pred_noise_func=diffusion,
+                func_inputs={'context': contexts[i, None]},
+                return_intermediates=True,
+                return_step=sampler.steps // 10
+            )
+            generated_images = vae.decoder(
+                torch.cat(sampled_latent, dim=0), rescale=True
+            )
+
+            fig, axes = plt.subplots(1, 10, figsize=(10 * 5, 5))
+            for i in range(10):
+                axes[i].imshow(
+                    generated_images[i].cpu().numpy().transpose(1, 2, 0), cmap=cmap
+                )
+                axes[i].set_title(f"DDIM Generated Image {i+1}")
+                axes[i].axis('off')
+
+            plt.tight_layout()
+
+            if use_tensorboard:
+                writer.add_figure('DDIM Generated Images', fig, global_step=epoch)
+                plt.close(fig)
 
     if return_model:
         return diffusion

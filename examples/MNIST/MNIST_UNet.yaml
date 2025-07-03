@@ -97,61 +97,35 @@ encoder:
     with:
       out: 160
 
-  - use: ResAndAttBlock # skip connections (+1) v
-    with:
-      in: 0
-      out: 320
-      n: 1
-
-  - use: down_conv # skip connections (+1) v
-    with:
-      out: 320
-
   - use: ResBlock # skip connections (+1) v
     with:
       in: 0
-      out: 320
+      out: 160
       n: 1
 
 bottleneck:
   - use: ResAndAttBlock
     with:
       in: 0
-      out: 320
+      out: 160
       n: 1
 
   - use: ResBlock
     with:
       in: 0
-      out: 320
+      out: 160
       n: 1
 
 decoder:
   - use: ResBlock # skip connections (-2)
     with:
-      in: 320
-      out: 320
+      in: 160
+      out: 160
       n: 2
 
   - use: up_conv
     with:
-      out: 320
-
-  - use: ResAndAttBlock # skip connections (-1)
-    with:
-      in: 320
-      out: 320
-      n: 1
-
-  - use: ResAndAttBlock # skip connections (-1)
-    with:
-      in: 160
-      out: 320
-      n: 1
-
-  - use: up_conv
-    with:
-      out: 320
+      out: 160
 
   - use: ResAndAttBlock # skip connections (-1)
     with:

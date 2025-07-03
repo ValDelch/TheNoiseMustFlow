@@ -25,7 +25,8 @@ class NoiseScheduler(torch.nn.Module):
     """
 
     def __init__(self, steps: int = 1000, betas: tuple[float, float] = (1e-4, 0.02), 
-                 schedule: str = 'linear', seed: Optional[int] = None):
+                 schedule: str = 'linear', seed: Optional[int] = None,
+                 device: str = 'cuda' if torch.cuda.is_available() else 'cpu'):
         """
         __init__
 
@@ -38,6 +39,7 @@ class NoiseScheduler(torch.nn.Module):
             schedule: The type of noise schedule to use. Available options are
                 'linear', 'cosine', 'quadratic', 'sigmoid' and 'geometric'.
             seed: Optional seed for reproducibility.
+            device: The device to use for the tensors (default is 'cuda' if available, otherwise 'cpu').
         """
         super(NoiseScheduler, self).__init__()
         assert steps > 0, "steps must be a positive integer"
@@ -66,7 +68,7 @@ class NoiseScheduler(torch.nn.Module):
             alphas[0] = alphas_cumprod[0]
             alphas[1:] = alphas_cumprod[1:] / alphas_cumprod[:-1]
 
-        self.generator = torch.Generator()
+        self.generator = torch.Generator(device=device)
         if seed is not None:
             self.generator.manual_seed(seed)
 

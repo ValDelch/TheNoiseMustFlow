@@ -24,7 +24,7 @@
 
 base_channels: 32 # This defines what will replace the 'f'
 latent_dim: 4 # The latent dimension of the VAE, which is the output of the encoder
-num_heads: 4 # Number of attention heads for attention blocks
+num_heads: 1 # Number of attention heads for attention blocks
 activation: SiLU # Activation function to be used in the residual blocks and at the end of the encoder
 groups: 8 # Number of groups for group normalization
 dropout: 0.1 # Dropout rate for regularization
