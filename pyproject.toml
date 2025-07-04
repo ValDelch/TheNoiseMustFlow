@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "the-noise-must-flow"
-version = "0.10.1"
+version = "0.11.0"
 description = "A toolkit for understanding, training, and visualizing diffusion models."
 authors = [
     { name = "Valentin Delchevalerie", email = "vdelchevalerie@gmail.com" }
@@ -37,7 +37,7 @@ where = ["src"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.10.1"
+version = "0.11.0"
 tag_format = "v$version"
 major_version_zero = false
 version_files = ["pyproject.toml:^version"]
