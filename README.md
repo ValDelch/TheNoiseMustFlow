@@ -62,21 +62,21 @@ This project aims to make generative diffusion approachable and powerful, offeri
   - [x] DDIM sampling
   - [x] VAE and U-Net architectures
   - [x] Loss functions
-- [ ] Add support for conditional diffusion (class labels, images, etc.)
 - [ ] Implement some utility functions to validate the configuration files
 
 ### 🧪 Training & Evaluation
 - [x] VAE Training loop
 - [x] Diffusion model training loop
 - [ ] Metrics: loss, FID, PSNR
-- [ ] Checkpointing & resume
+- [x] Checkpointing & resume
 - [ ] Support for distributed training
+- [x] Support for mixed precision training
 - [ ] Add pretrained model zoo
 
 ### 🎨 Visualization
 - [ ] Animate denoising steps
 - [ ] Plot noise schedule and beta curves
-- [ ] TensorBoard support
+- [x] TensorBoard support
 
 ### 🧰 Developer Experience
 - [ ] Modular code with config files
@@ -84,9 +84,9 @@ This project aims to make generative diffusion approachable and powerful, offeri
 - [ ] Documentation with usage examples
 
 ### 🌐 Educational Material
+- [x] Hands-on: training a diffusion model on MNIST
 - [ ] High-level explanation in README
-- [ ] Notebooks: DDPM math & intuition
-- [ ] Tutorials: build and train your own DDPM from scratch
+- [ ] Notebooks with explanations of key concepts and tutorials
 
 ---
 
@@ -137,7 +137,9 @@ Here's a quick overview of the main components in this repository:
 | `examples/`                           | Example scripts for training and inference                   |
 | └── `MNIST/`                          | Example training script for MNIST dataset                    |
 |     ├── `MNIST_VAE.yaml`              | Configuration for VAE on MNIST                               |
-|     ├── `MNIST_UNet.yaml`             | Configuration for U-Net on MNIST                             |            
+|     ├── `MNIST_UNet.yaml`             | Configuration for U-Net on MNIST                             |
+|     ├── `MNIST.py`                    | Implementation of the MNIST dataset for training             |
+|     ├── `sample.ipynb`                | Jupyter notebook to sample from a trained model              |            
 |     └── `train_mnist.py`              | Script to train a diffusion model on MNIST                   |
 | `src/`                                | Root source folder for all Python modules                    |
 | ├── `core/`                           | Core logic for diffusion models and sampling                 |
