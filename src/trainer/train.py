@@ -2,9 +2,6 @@
 train.py
 
 This module implements the training loops for the VAE and diffusion model.
-
-# TODO: implement a single step train and test functions for both VAE and Diffusion models
-# TODO: allow for the use of mixed precision and Data Parallel training
 """
 
 
