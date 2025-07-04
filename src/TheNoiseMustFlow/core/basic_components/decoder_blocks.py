@@ -15,8 +15,8 @@ import os
 import torch
 from torch import nn
 
-from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
-from core.basic_components.functional_blocks import Upsample
+from TheNoiseMustFlow.core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
+from TheNoiseMustFlow.core.basic_components.functional_blocks import Upsample
 
 
 class VADecoderBlock(nn.Module):

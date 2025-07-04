@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 import torch
 
-from core.schedulers import NoiseScheduler
+from TheNoiseMustFlow.core.schedulers import NoiseScheduler
 
 
 class DDPMSampler(torch.nn.Module):

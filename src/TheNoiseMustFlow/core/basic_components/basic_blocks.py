@@ -15,7 +15,7 @@ import warnings
 import torch
 from torch import nn
 
-from core.basic_components.functional_blocks import LayerNorm, SelfAttention, CrossAttention, GEGLU
+from TheNoiseMustFlow.core.basic_components.functional_blocks import LayerNorm, SelfAttention, CrossAttention, GEGLU
 
 
 class BasicResidualBlock(nn.Module):

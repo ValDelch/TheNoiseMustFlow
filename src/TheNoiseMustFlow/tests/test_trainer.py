@@ -4,11 +4,11 @@ import pytest
 import torch
 from torch.optim import SGD
 
-from trainer.losses import (
+from TheNoiseMustFlow.trainer.losses import (
     mse_loss, huber_noise_loss, snr_weighted_mse_loss, kl_divergence, VAE_loss, cross_entropy
 )
-from trainer.metrics import PSNR, SSIM
-from trainer.custom_lr_schedulers import CosineLRScheduler
+from TheNoiseMustFlow.trainer.metrics import PSNR, SSIM
+from TheNoiseMustFlow.trainer.custom_lr_schedulers import CosineLRScheduler
 
 #
 # Tests for the losses

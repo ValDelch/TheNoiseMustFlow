@@ -15,7 +15,7 @@ import os
 import torch
 from torch import nn
 
-from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
+from TheNoiseMustFlow.core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
 
 
 # Type alias

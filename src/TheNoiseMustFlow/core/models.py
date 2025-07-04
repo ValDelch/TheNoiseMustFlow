@@ -15,10 +15,10 @@ import yaml
 import torch
 from torch import nn
 
-from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
-from core.basic_components.encoder_blocks import VAEncoderBlock, UNetEncoderBlock
-from core.basic_components.decoder_blocks import VADecoderBlock, UNetDecoderBlock
-from core.basic_components.encodings import TimeEncoding
+from TheNoiseMustFlow.core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
+from TheNoiseMustFlow.core.basic_components.encoder_blocks import VAEncoderBlock, UNetEncoderBlock
+from TheNoiseMustFlow.core.basic_components.decoder_blocks import VADecoderBlock, UNetDecoderBlock
+from TheNoiseMustFlow.core.basic_components.encodings import TimeEncoding
 
 
 # Type alias

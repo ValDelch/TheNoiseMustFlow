@@ -16,10 +16,10 @@ import torch
 from torch.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
-from core.models import VAE, Diffusion
+from TheNoiseMustFlow.core.models import VAE, Diffusion
 
-from core.schedulers import NoiseScheduler
-from core.samplers import DDPMSampler, DDIMSampler
+from TheNoiseMustFlow.core.schedulers import NoiseScheduler
+from TheNoiseMustFlow.core.samplers import DDPMSampler, DDIMSampler
 
 import matplotlib.pyplot as plt
 

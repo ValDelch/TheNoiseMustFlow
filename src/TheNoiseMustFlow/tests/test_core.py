@@ -7,16 +7,16 @@ import pytest
 import torch
 from torch import nn
 
-from core.schedulers import NoiseScheduler
-from core.samplers import DDPMSampler, DDIMSampler
-from core.basic_components.encodings import TimeEncoding
-from core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock, BasicFeedForwardBlock
-from core.basic_components.functional_blocks import (
+from TheNoiseMustFlow.core.schedulers import NoiseScheduler
+from TheNoiseMustFlow.core.samplers import DDPMSampler, DDIMSampler
+from TheNoiseMustFlow.core.basic_components.encodings import TimeEncoding
+from TheNoiseMustFlow.core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock, BasicFeedForwardBlock
+from TheNoiseMustFlow.core.basic_components.functional_blocks import (
     LayerNorm, MultiWaveletAct, SelfAttention, CrossAttention, GEGLU, Upsample
 )
-from core.basic_components.encoder_blocks import VAEncoderBlock, UNetEncoderBlock
-from core.basic_components.decoder_blocks import VADecoderBlock, UNetDecoderBlock
-from core.models import VAE, UNet, Diffusion
+from TheNoiseMustFlow.core.basic_components.encoder_blocks import VAEncoderBlock, UNetEncoderBlock
+from TheNoiseMustFlow.core.basic_components.decoder_blocks import VADecoderBlock, UNetDecoderBlock
+from TheNoiseMustFlow.core.models import VAE, UNet, Diffusion
 
 #
 # Tests for the schedulers
@@ -797,7 +797,7 @@ def test_invalid_input_feature_size():
 @pytest.fixture
 def default_config_path():
     here = os.path.dirname(__file__)
-    config_path = os.path.abspath(os.path.join(here, "..", "..", "configs", "default_VAE.yaml"))
+    config_path = os.path.abspath(os.path.join(here, "..", "..", "..", "configs", "default_VAE.yaml"))
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Config file not found at: {config_path}")
     return config_path
@@ -850,7 +850,7 @@ def test_encoder_invalid_yaml_extension():
 @pytest.fixture
 def default_unet_config_path():
     here = os.path.dirname(__file__)
-    config_path = os.path.abspath(os.path.join(here, "..", "..", "configs", "default_UNet.yaml"))
+    config_path = os.path.abspath(os.path.join(here, "..", "..", "..", "configs", "default_UNet.yaml"))
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Config file not found at: {config_path}")
     return config_path

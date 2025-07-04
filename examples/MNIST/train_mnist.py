@@ -24,11 +24,11 @@ from torch.utils.data import DataLoader
 
 from MNIST import MNIST
 
-from core.models import VAE, Diffusion
-from core.schedulers import NoiseScheduler
-from trainer.custom_lr_schedulers import CosineLRScheduler
-from trainer.losses import VAE_loss, snr_weighted_mse_loss, mse_loss
-from trainer.train import train_vae, train_diffusion
+from TheNoiseMustFlow.core.models import VAE, Diffusion
+from TheNoiseMustFlow.core.schedulers import NoiseScheduler
+from TheNoiseMustFlow.trainer.custom_lr_schedulers import CosineLRScheduler
+from TheNoiseMustFlow.trainer.losses import VAE_loss, snr_weighted_mse_loss, mse_loss
+from TheNoiseMustFlow.trainer.train import train_vae, train_diffusion
 
 
 if __name__ == "__main__":

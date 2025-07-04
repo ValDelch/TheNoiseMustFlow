@@ -114,7 +114,7 @@ To install the project and start experimenting with diffusion models, follow the
 
 The different components of the project will be installed along with their dependencies. After that, you can start using the different components of the project, e.g.,
 ```python
-from core.schedulers import NoiseScheduler
+from TheNoiseMustFlow.core.schedulers import NoiseScheduler
 scheduler = NoiseScheduler()
 ```
 
@@ -141,7 +141,7 @@ Here's a quick overview of the main components in this repository:
 |     ├── `MNIST.py`                    | Implementation of the MNIST dataset for training             |
 |     ├── `sample.ipynb`                | Jupyter notebook to sample from a trained model              |            
 |     └── `train_mnist.py`              | Script to train a diffusion model on MNIST                   |
-| `src/`                                | Root source folder for all Python modules                    |
+| `src/TheNoiseMustFlow/`               | Root source folder for all Python modules                    |
 | ├── `core/`                           | Core logic for diffusion models and sampling                 |
 | │   ├── `basic_components/`           | Modular low-level building blocks for models                 |
 | │   │   ├── `basic_blocks.py`         | Simple building blocks                                       |
