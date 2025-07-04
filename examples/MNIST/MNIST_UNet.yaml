@@ -21,10 +21,10 @@
 latent_dim: 4 # The latent dimension of the VAE, which is the output of the encoder
 d_time: 1280 # The dimension of the time embedding (for the residual blocks)
 d_context: 128 # The dimension of the context embedding (for the attention blocks)
-num_heads: 4 # Number of attention heads for attention blocks
+num_heads: 1 # Number of attention heads for attention blocks
 activation: SiLU # Activation function to be used in the residual blocks and at the end of the encoder
 groups: 8 # Number of groups for group normalization
-dropout: 0.1 # Dropout rate for regularization
+dropout: 0.05 # Dropout rate for regularization
 
 # Blocks are templates for layers that can be reused in the encoder and decoder.
 

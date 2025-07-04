@@ -78,7 +78,7 @@ if __name__ == "__main__":
     parser.add_argument("--diffusion_lr", type=float, default=2e-5, help="Learning rate for diffusion model")
     parser.add_argument("--diffusion_warmup", type=str, choices=["none", "cosine"], default="cosine", 
                         help="Type of warmup scheduler to use for diffusion model")
-    parser.add_argument("--diffusion_warmup_steps", type=int, default=20, 
+    parser.add_argument("--diffusion_warmup_steps", type=int, default=10, 
                         help="Number of warmup steps for the diffusion model scheduler")
     
     parser.add_argument("--mixed_precision", action="store_true",
