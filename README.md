@@ -92,7 +92,12 @@ This project aims to make generative diffusion approachable and powerful, offeri
 
 ## 🔧 Installation
 
-To install the project and start experimenting with diffusion models, follow these steps:
+For an easy install:
+```bash
+pip install git+https://github.com/ValDelch/TheNoiseMustFlow.git
+```
+
+To install the project and start experimenting with the project, follow these steps:
 
 1. **Clone the repository**:
   ```bash
