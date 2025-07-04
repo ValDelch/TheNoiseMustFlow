@@ -34,8 +34,18 @@ class MNIST(torch.utils.data.Dataset):
         # Reshape to 32x32 for convenience with the models
         self.transform = transforms.Compose([
             transforms.Resize((64, 64)),
+
+            # === Augmentations ===
+            transforms.RandomAffine(
+                degrees=10,
+                translate=(0.1, 0.1),
+                scale=(0.9, 1.1),
+                shear=5
+            ),
+            transforms.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0)),
+
             transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,))
+            transforms.Normalize((0.5,), (0.5,)),
         ])
         self.dataset = datasets.MNIST(
             root=root,
