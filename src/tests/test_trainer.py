@@ -2,11 +2,13 @@
 
 import pytest
 import torch
+from torch.optim import SGD
 
 from trainer.losses import (
     mse_loss, huber_noise_loss, snr_weighted_mse_loss, kl_divergence, VAE_loss, cross_entropy
 )
 from trainer.metrics import PSNR, SSIM
+from trainer.custom_lr_schedulers import CosineLRScheduler
 
 #
 # Tests for the losses
@@ -111,3 +113,69 @@ def test_batch_ssim():
     ssim = SSIM(x.clamp(0, 1), y.clamp(0, 1))
     assert isinstance(ssim, float)
     assert 0.0 < ssim < 1.0
+
+#
+# Tests fir the lr schedulers
+#
+
+# CosineLRScheduler
+
+@pytest.fixture
+def dummy_optimizer():
+    model = torch.nn.Linear(10, 1)
+    return SGD(model.parameters(), lr=0.1)
+
+def test_cosine_annealing_phase(dummy_optimizer):
+    scheduler = CosineLRScheduler(
+        optimizer=dummy_optimizer,
+        base_lr=0.1,
+        min_lr=0.01,
+        total_epochs=10,
+        warmup_epochs=2
+    )
+
+    # warmup
+    for _ in range(2):
+        dummy_optimizer.step()
+        scheduler.step()
+
+    lrs = []
+    for _ in range(8):
+        dummy_optimizer.step()
+        scheduler.step()
+        lrs.append(scheduler.get_last_lr()[0])
+
+    # Ensure LR decreases and stays above min_lr
+    for i in range(1, len(lrs)):
+        assert lrs[i] <= lrs[i-1]
+        assert lrs[i] >= 0.01
+
+def test_learning_rate_bounds(dummy_optimizer):
+    scheduler = CosineLRScheduler(
+        optimizer=dummy_optimizer,
+        base_lr=0.05,
+        min_lr=0.01,
+        total_epochs=4,
+        warmup_epochs=0
+    )
+
+    for _ in range(10):  # go beyond total_epochs
+        dummy_optimizer.step()
+        scheduler.step()
+        lr = scheduler.get_last_lr()[0]
+        assert 0.01 <= lr <= 0.05
+
+def test_step_with_metrics_argument(dummy_optimizer):
+    scheduler = CosineLRScheduler(
+        optimizer=dummy_optimizer,
+        base_lr=0.1,
+        min_lr=0.01,
+        total_epochs=5,
+        warmup_epochs=1
+    )
+
+    dummy_optimizer.step()
+    try:
+        scheduler.step(metrics=0.5)  # should be ignored
+    except Exception as e:
+        pytest.fail(f"Scheduler should ignore metrics argument, but failed: {e}")
