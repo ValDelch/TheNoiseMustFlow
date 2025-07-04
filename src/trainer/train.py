@@ -2,16 +2,21 @@
 train.py
 
 This module implements the training loops for the VAE and diffusion model.
+
+# TODO: implement a single step train and test functions for both VAE and Diffusion models
+# TODO: allow for the use of mixed precision and Data Parallel training
 """
 
 
 from __future__ import annotations
 from typing import Optional
+from contextlib import nullcontext
 
 import os
 from tqdm import tqdm
 
 import torch
+from torch.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
 from core.models import VAE, Diffusion
@@ -151,7 +156,7 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
               test_dataloader: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer,
               losses: list[dict], epochs: int,  scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
               checkpoint_folder: str = "./checkpoints", use_tqdm: bool = False, use_tensorboard: bool = False, 
-              validation: bool = True, seed: Optional[int] = None,
+              validation: bool = True, seed: Optional[int] = None, mixed_precision: bool = False,
               device: str = "cuda" if torch.cuda.is_available() else "cpu", return_model: bool = False) -> Optional[VAE]:
     """
     Train the VAE model.
@@ -173,6 +178,7 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
         use_tensorboard: Whether to use TensorBoard for logging.
         validation: Whether to perform validation after each epoch on one test batch.
         seed: Random seed for reproducibility.
+        mixed_precision: Whether to use mixed precision training.
         device: Device to use for training (e.g., 'cuda' or 'cpu').
         return_model: Whether to return the trained VAE model.
     """
@@ -211,6 +217,7 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
     if seed is not None:
         generator.manual_seed(seed)
 
+    scaler = GradScaler() if (device.startswith('cuda') and mixed_precision) else None
     for epoch in range(start_epoch, epochs):
         
         #
@@ -223,32 +230,28 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
 
         pbar = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{epochs}", unit="batch", disable=not use_tqdm)
         for batch in pbar:
-            images = batch['image'].to(device)
+            optimizer.zero_grad(set_to_none=True)
 
-            optimizer.zero_grad()
-
-            # Forward pass
-            noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
-            _, stats, rec_images = vae(
-                images, noise, return_stats=True, rescale=False, return_rec=True
-            )
-
-            # Loss computations
-            loss_fn_inputs = {
-                'x': images,
-                'x_hat': rec_images,
-                'stats': stats
-            }
-            _loss = compute_loss(loss_fn_inputs, losses)
+            with autocast(enabled=(scaler is not None), device_type="cuda"):
+                # Forward pass
+                _loss = step_vae(
+                    vae, batch, losses, generator, device
+                )
 
             # Update the training losses
             for k, v in _loss.items():
                 train_losses[k] += v.item() / len(train_dataloader)
 
-            # Backward pass and optimization
             total_loss = sum(_loss.values())
-            total_loss.backward()
-            optimizer.step()
+            
+            # Backward pass and optimization
+            if scaler is not None:
+                scaler.scale(total_loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                total_loss.backward()
+                optimizer.step()
 
         #
         # Testing loop
@@ -261,25 +264,14 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
         pbar = tqdm(test_dataloader, desc=f"Testing {epoch + 1}/{epochs}", unit="batch", disable=not use_tqdm)
         with torch.no_grad():
             for batch in pbar:
-                images = batch['image'].to(device)
-                
                 # Forward pass
-                noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
-                _, stats, rec_images = vae(
-                    images, noise, return_stats=True, rescale=False, return_rec=True
+                _loss = step_vae(
+                    vae, batch, losses, generator, device
                 )
-
-                # Loss computations
-                loss_fn_inputs = {
-                    'x': images,
-                    'x_hat': rec_images,
-                    'stats': stats
-                }
-                _loss = compute_loss(loss_fn_inputs, losses)
 
                 # Update the testing losses
                 for k, v in _loss.items():
-                    test_losses[k] += v / len(test_dataloader)
+                    test_losses[k] += v.item() / len(test_dataloader)
         
         # Update the scheduler if it exists
         tot_test_loss = sum(test_losses.values())
@@ -357,11 +349,47 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
     if return_model:
         return vae
     
+def step_vae(vae: VAE, batch: dict, losses: list[dict], 
+             generator: torch.Generator, device: str) -> dict[str, torch.Tensor]:
+    """
+    Perform a single step for the VAE model.
+
+    Args:
+        vae: The VAE model to train.
+        batch: A dictionary containing the batch data.
+            Expected keys are 'image' for the input images.
+        losses: List of dictionaries, each containing:
+            - 'loss_name': Name of the loss function (e.g., 'mse_loss', 'huber_noise_loss', etc.)
+            - 'callable': The loss function to call
+            - 'weight': Weight to apply to the loss
+            - 'kwargs': Additional keyword arguments for the loss function.
+        generator: Random number generator for reproducibility.
+        device: Device to use for training (e.g., 'cuda' or 'cpu').
+    
+    Returns:
+        A dictionary containing the computed losses for the batch.
+    """
+    images = batch['image'].to(device)
+
+    # Forward pass
+    noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
+    _, stats, rec_images = vae(
+        images, noise, return_stats=True, rescale=False, return_rec=True
+    )
+
+    # Loss computations
+    loss_fn_inputs = {
+        'x': images,
+        'x_hat': rec_images,
+        'stats': stats
+    }
+    return compute_loss(loss_fn_inputs, losses)
+
 def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train_dataloader: torch.utils.data.DataLoader, 
                     test_dataloader: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer, losses: list[dict], 
                     epochs: int, vae: Optional[VAE] = None, scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
                     checkpoint_folder: str = "./checkpoints", use_tqdm: bool = False, use_tensorboard: bool = False, 
-                    validation: bool = True, seed: Optional[int] = None,
+                    validation: bool = True, seed: Optional[int] = None, mixed_precision: bool = False,
                     device: str = "cuda" if torch.cuda.is_available() else "cpu", return_model: bool = False) -> Optional[Diffusion]:
     """
     Train the diffusion model.
@@ -386,6 +414,7 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
         use_tensorboard: Whether to use TensorBoard for logging.
         validation: Whether to perform validation after each epoch on one test batch.
         seed: Random seed for reproducibility.
+        mixed_precision: Whether to use mixed precision training.
         device: Device to use for training (e.g., 'cuda' or 'cpu').
         return_model: Whether to return the trained diffusion model.
     """
@@ -425,6 +454,7 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
     if seed is not None:
         generator.manual_seed(seed)
 
+    scaler = GradScaler() if (device.startswith('cuda') and mixed_precision) else None
     for epoch in range(start_epoch, epochs):
 
         #
@@ -438,52 +468,28 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
 
         pbar = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{epochs}", unit="batch", disable=not use_tqdm)
         for batch in pbar:
-            contexts = batch['context'].to(device)
-            if vae is not None:
-                images = batch['image'].to(device)
-                noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
-                with torch.no_grad():
-                    latent_images = vae(
-                        images, noise, return_stats=False, rescale=True, return_rec=False
-                    )
-            else:
-                latent_images = batch['image'].to(device)
+            optimizer.zero_grad(set_to_none=True)
 
-            optimizer.zero_grad()
-
-            # Sample the time steps and add the noise
-            t = torch.randint(
-                0, noise_scheduler.steps, (latent_images.size(0),), 
-                device=device, generator=generator
-            )
-            snr = noise_scheduler.compute_snr(t)
-
-            noise = torch.randn(latent_images.size(), device=device, generator=generator)
-            noisy_images = noise_scheduler.add_noise_cumulative(
-                latent_images, t, noise
-            )
-
-            # Forward pass through the diffusion model
-            pred_noise = diffusion(
-                noisy_images, t, contexts
-            )
-
-            # Loss computations
-            loss_fn_inputs = {
-                'x': noise,
-                'x_hat': pred_noise,
-                'snr': snr
-            }
-            _loss = compute_loss(loss_fn_inputs, losses)
+            with autocast(enabled=(scaler is not None), device_type="cuda"):
+                # Forward pass
+                _loss = step_diffusion(
+                    diffusion, batch, noise_scheduler, losses, generator, device, vae
+                )
 
             # Update the training losses
             for k, v in _loss.items():
                 train_losses[k] += v.item() / len(train_dataloader)
 
-            # Backward pass and optimization
             total_loss = sum(_loss.values())
-            total_loss.backward()
-            optimizer.step()
+
+            # Backward pass and optimization
+            if scaler is not None:
+                scaler.scale(total_loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                total_loss.backward()
+                optimizer.step()
 
         #
         # Testing loop
@@ -497,40 +503,10 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
         pbar = tqdm(test_dataloader, desc=f"Testing {epoch + 1}/{epochs}", unit="batch", disable=not use_tqdm)
         with torch.no_grad():
             for batch in pbar:
-                contexts = batch['context'].to(device)
-                if vae is not None:
-                    images = batch['image'].to(device)
-                    noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
-                    latent_images = vae(
-                        images, noise, return_stats=False, rescale=True, return_rec=False
-                    )
-                else:
-                    latent_images = batch['image'].to(device)
-
-                # Sample the time steps and add the noise
-                t = torch.randint(
-                    0, noise_scheduler.steps, (latent_images.size(0),), 
-                    device=device, generator=generator
+                # Forward pass
+                _loss = step_diffusion(
+                    diffusion, batch, noise_scheduler, losses, generator, device, vae
                 )
-                snr = noise_scheduler.compute_snr(t)
-
-                noise = torch.randn(latent_images.size(), device=device, generator=generator)
-                noisy_images = noise_scheduler.add_noise_cumulative(
-                    latent_images, t, noise
-                )
-
-                # Forward pass through the diffusion model
-                pred_noise = diffusion(
-                    noisy_images, t, contexts
-                )
-
-                # Loss computations
-                loss_fn_inputs = {
-                    'x': noise,
-                    'x_hat': pred_noise,
-                    'snr': snr
-                }
-                _loss = compute_loss(loss_fn_inputs, losses)
 
                 # Update the testing losses
                 for k, v in _loss.items():
@@ -714,3 +690,62 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
 
     if return_model:
         return diffusion
+    
+def step_diffusion(diffusion: Diffusion, batch: dict, noise_scheduler: NoiseScheduler, losses: list[dict], 
+                   generator: torch.Generator, device: str, vae: Optional[VAE] = None) -> dict[str, torch.Tensor]:
+    """
+    Perform a single step for the diffusion model.
+
+    Args:
+        diffusion: The diffusion model to train.
+        batch: A dictionary containing the batch data.
+            Expected keys are 'image' for the input images and 'context' for additional context.
+        noise_scheduler: The noise scheduler for the diffusion model.
+        losses: List of dictionaries, each containing:
+            - 'loss_name': Name of the loss function (e.g., 'mse_loss', 'huber_noise_loss', etc.)
+            - 'callable': The loss function to call
+            - 'weight': Weight to apply to the loss
+            - 'kwargs': Additional keyword arguments for the loss function.
+        generator: Random number generator for reproducibility.
+        device: Device to use for training (e.g., 'cuda' or 'cpu').
+        vae: The VAE model used for encoding and decoding images.
+            If None, dataloaders are expected to return latent vectors directly.
+    
+    Returns:
+        A dictionary containing the computed losses for the batch.
+    """
+    contexts = batch['context'].to(device)
+    if vae is not None:
+        images = batch['image'].to(device)
+        noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
+        with torch.no_grad():
+            latent_images = vae(
+                images, noise, return_stats=False, rescale=True, return_rec=False
+            )
+    else:
+        latent_images = batch['image'].to(device)
+
+    # Sample the time steps and add the noise
+    t = torch.randint(
+        0, noise_scheduler.steps, (latent_images.size(0),), 
+        device=device, generator=generator
+    )
+    snr = noise_scheduler.compute_snr(t)
+
+    noise = torch.randn(latent_images.size(), device=device, generator=generator)
+    noisy_images = noise_scheduler.add_noise_cumulative(
+        latent_images, t, noise
+    )
+
+    # Forward pass through the diffusion model
+    pred_noise = diffusion(
+        noisy_images, t, contexts
+    )
+
+    # Loss computations
+    loss_fn_inputs = {
+        'x': noise,
+        'x_hat': pred_noise,
+        'snr': snr
+    }
+    return compute_loss(loss_fn_inputs, losses)

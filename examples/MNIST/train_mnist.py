@@ -80,6 +80,9 @@ if __name__ == "__main__":
                         help="Type of warmup scheduler to use for diffusion model")
     parser.add_argument("--diffusion_warmup_steps", type=int, default=20, 
                         help="Number of warmup steps for the diffusion model scheduler")
+    
+    parser.add_argument("--mixed_precision", action="store_true",
+                        help="Use mixed precision training if available (requires CUDA)")
 
     args = parser.parse_args()
 
@@ -143,10 +146,10 @@ if __name__ == "__main__":
         ]
 
         vae = train_vae(
-            vae, train_dataloader, test_dataloader, optimizer, losses,
-            epochs=args.vae_epochs, scheduler=scheduler, checkpoint_folder=checkpoint_folder, 
-            use_tqdm=args.use_tqdm, use_tensorboard=args.use_tensorboard, validation=True, 
-            device=args.device, seed=args.seed, return_model=True
+            vae, train_dataloader, test_dataloader, optimizer, losses, epochs=args.vae_epochs, 
+            scheduler=scheduler, checkpoint_folder=checkpoint_folder, use_tqdm=args.use_tqdm, 
+            use_tensorboard=args.use_tensorboard, validation=True, device=args.device, 
+            seed=args.seed, mixed_precision=args.mixed_precision, return_model=True
         )
 
     # 4. Instantiate a diffusion model, a NoiseScheduler and a Sampler
@@ -207,5 +210,5 @@ if __name__ == "__main__":
             diffusion, noise_scheduler, train_dataloader, test_dataloader, optimizer, losses,
             epochs=args.diffusion_epochs, vae=vae, scheduler=scheduler, checkpoint_folder=checkpoint_folder,
             use_tqdm=args.use_tqdm, use_tensorboard=args.use_tensorboard, device=args.device, 
-            seed=args.seed, return_model=True
+            seed=args.seed, mixed_precision=args.mixed_precision, return_model=True
         )
