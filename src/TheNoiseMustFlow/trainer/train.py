@@ -6,7 +6,7 @@ This module implements the training loops for the VAE and diffusion model.
 
 
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Union
 from contextlib import nullcontext
 
 import os
@@ -689,7 +689,8 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
         return diffusion
     
 def step_diffusion(diffusion: Diffusion, batch: dict, noise_scheduler: NoiseScheduler, losses: list[dict], 
-                   generator: torch.Generator, device: str, vae: Optional[VAE] = None) -> dict[str, torch.Tensor]:
+                   generator: torch.Generator, device: str, vae: Optional[VAE] = None,
+                   return_pred: bool = False) -> Union[dict[str, torch.Tensor], tuple[dict[str, torch.Tensor], torch.Tensor]]:
     """
     Perform a single step for the diffusion model.
 
@@ -707,6 +708,7 @@ def step_diffusion(diffusion: Diffusion, batch: dict, noise_scheduler: NoiseSche
         device: Device to use for training (e.g., 'cuda' or 'cpu').
         vae: The VAE model used for encoding and decoding images.
             If None, dataloaders are expected to return latent vectors directly.
+        return_pred: Whether to return the predicted noise in the output.
     
     Returns:
         A dictionary containing the computed losses for the batch.
@@ -745,4 +747,6 @@ def step_diffusion(diffusion: Diffusion, batch: dict, noise_scheduler: NoiseSche
         'x_hat': pred_noise,
         'snr': snr
     }
+    if return_pred:
+        return compute_loss(loss_fn_inputs, losses), pred_noise
     return compute_loss(loss_fn_inputs, losses)
