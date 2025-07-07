@@ -690,7 +690,7 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
     
 def step_diffusion(diffusion: Diffusion, batch: dict, noise_scheduler: NoiseScheduler, losses: list[dict], 
                    generator: torch.Generator, device: str, vae: Optional[VAE] = None,
-                   return_pred: bool = False) -> Union[dict[str, torch.Tensor], tuple[dict[str, torch.Tensor], torch.Tensor]]:
+                   sampler: Optional[Union[DDPMSampler, DDIMSampler]] = None) -> Union[dict[str, torch.Tensor], tuple[dict[str, torch.Tensor], torch.Tensor]]:
     """
     Perform a single step for the diffusion model.
 
@@ -708,7 +708,7 @@ def step_diffusion(diffusion: Diffusion, batch: dict, noise_scheduler: NoiseSche
         device: Device to use for training (e.g., 'cuda' or 'cpu').
         vae: The VAE model used for encoding and decoding images.
             If None, dataloaders are expected to return latent vectors directly.
-        return_pred: Whether to return the predicted noise in the output.
+        sampler: Optional sampler for re-generating images from predicted noise.
     
     Returns:
         A dictionary containing the computed losses for the batch.
@@ -747,6 +747,16 @@ def step_diffusion(diffusion: Diffusion, batch: dict, noise_scheduler: NoiseSche
         'x_hat': pred_noise,
         'snr': snr
     }
-    if return_pred:
-        return compute_loss(loss_fn_inputs, losses), pred_noise
+
+    # If sampler is provided, we will also compute the reconstructed images
+    if sampler is not None:
+        denoised_latent = torch.empty_like(noisy_images)
+        for i, step in enumerate(t):
+            denoised_latent[i] = sampler.sample_prev_step(
+                noisy_images[i], int(step), pred_noise[i]
+            )
+        rec_images = vae.decoder(
+            denoised_latent, rescale=True
+        )
+        return compute_loss(loss_fn_inputs, losses), rec_images
     return compute_loss(loss_fn_inputs, losses)
