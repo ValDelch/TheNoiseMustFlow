@@ -7,7 +7,6 @@ DL models, like attention mechanisms, layer normalization, custom activations, e
 # TODO: implement a fast attention mechanism variant, e.g. using Flash Attention or similar
 """
 
-
 from __future__ import annotations
 from typing import Union, Optional
 import warnings
@@ -46,8 +45,13 @@ class SelfAttention(nn.Module):
 
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
-    def forward(self, x: torch.Tensor, causal_mask: bool = False, return_attn: bool = False, 
-                key_padding_mask: Optional[torch.Tensor] = None) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+    def forward(
+        self,
+        x: torch.Tensor,
+        causal_mask: bool = False,
+        return_attn: bool = False,
+        key_padding_mask: Optional[torch.Tensor] = None,
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         forward
 
@@ -64,20 +68,30 @@ class SelfAttention(nn.Module):
             Output tensor of shape (batch_size, seq_len, dim).
         """
         assert x.dim() == 3, "Input tensor must be 3D (batch_size, seq_len, dim)"
-        assert x.shape[2] == self.dim, f"Input tensor must have last dimension of size {self.dim}, got {x.shape[2]}"
+        assert x.shape[2] == self.dim, (
+            f"Input tensor must have last dimension of size {self.dim}, got {x.shape[2]}"
+        )
 
         batch_size, seq_len, _ = x.shape
         interm_shape = (batch_size, seq_len, self.num_heads, self.head_dim)
 
         # Project input to query, key, value
-        q, k, v = self.qkv_proj(x).chunk(3, dim=-1) # (batch_size, seq_len, 3 * dim)
+        q, k, v = self.qkv_proj(x).chunk(3, dim=-1)  # (batch_size, seq_len, 3 * dim)
 
-        q = q.reshape(*interm_shape).transpose(1, 2)  # (batch_size, num_heads, seq_len, head_dim)
-        k = k.reshape(*interm_shape).transpose(1, 2)  # (batch_size, num_heads, seq_len, head_dim)
-        v = v.reshape(*interm_shape).transpose(1, 2)  # (batch_size, num_heads, seq_len, head_dim)
+        q = q.reshape(*interm_shape).transpose(
+            1, 2
+        )  # (batch_size, num_heads, seq_len, head_dim)
+        k = k.reshape(*interm_shape).transpose(
+            1, 2
+        )  # (batch_size, num_heads, seq_len, head_dim)
+        v = v.reshape(*interm_shape).transpose(
+            1, 2
+        )  # (batch_size, num_heads, seq_len, head_dim)
 
         # Calculate attention scores
-        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dim ** 0.5) # (batch_size, num_heads, seq_len, seq_len)
+        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / (
+            self.head_dim**0.5
+        )  # (batch_size, num_heads, seq_len, seq_len)
 
         # Apply masks if provided
         if causal_mask or key_padding_mask is not None:
@@ -86,37 +100,55 @@ class SelfAttention(nn.Module):
 
             if causal_mask:
                 causal = torch.triu(
-                    torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool), diagonal=1
+                    torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool),
+                    diagonal=1,
                 )
-                full_mask |= causal.unsqueeze(0).unsqueeze(0) # (1, 1, seq_len, seq_len) for broadcasting
+                full_mask |= causal.unsqueeze(0).unsqueeze(
+                    0
+                )  # (1, 1, seq_len, seq_len) for broadcasting
 
             if key_padding_mask is not None:
-                assert key_padding_mask.dim() == 2 and key_padding_mask.shape == (batch_size, seq_len), \
-                    "key_padding_mask must be 2D with shape (batch_size, seq_len)"
-                padding = key_padding_mask.unsqueeze(1).unsqueeze(2) # (batch_size, 1, 1, seq_len) for broadcasting
+                assert key_padding_mask.dim() == 2 and key_padding_mask.shape == (
+                    batch_size,
+                    seq_len,
+                ), "key_padding_mask must be 2D with shape (batch_size, seq_len)"
+                padding = key_padding_mask.unsqueeze(1).unsqueeze(
+                    2
+                )  # (batch_size, 1, 1, seq_len) for broadcasting
                 full_mask |= padding
 
-            mask_value = -1e9 if attn_scores.dtype == torch.float16 else float('-inf') # Better for mixed precision support
+            mask_value = (
+                -1e9 if attn_scores.dtype == torch.float16 else float("-inf")
+            )  # Better for mixed precision support
             attn_scores = attn_scores.masked_fill(full_mask, mask_value)
 
         # Apply softmax to get attention weights
-        attn_scores = attn_scores - attn_scores.max(dim=-1, keepdim=True).values # For numerical stability
-        attn_weights = self.dropout(F.softmax(attn_scores, dim=-1)) # (batch_size, num_heads, seq_len, seq_len)
+        attn_scores = (
+            attn_scores - attn_scores.max(dim=-1, keepdim=True).values
+        )  # For numerical stability
+        attn_weights = self.dropout(
+            F.softmax(attn_scores, dim=-1)
+        )  # (batch_size, num_heads, seq_len, seq_len)
 
-        output = torch.matmul(attn_weights, v) # (batch_size, num_heads, seq_len, head_dim)
+        output = torch.matmul(
+            attn_weights, v
+        )  # (batch_size, num_heads, seq_len, head_dim)
         output = output.transpose(1, 2).reshape(batch_size, seq_len, self.dim)
 
         if return_attn:
             return self.out_proj(output), attn_weights.to(dtype=torch.float32)
         else:
-            return self.out_proj(output) # (batch_size, seq_len, dim)
-        
+            return self.out_proj(output)  # (batch_size, seq_len, dim)
+
+
 class CrossAttention(nn.Module):
     """
     A basic implementation of cross-attention mechanism.
     """
 
-    def __init__(self, dim: int, cross_dim: int, num_heads: int = 8, dropout: float = 0.0):
+    def __init__(
+        self, dim: int, cross_dim: int, num_heads: int = 8, dropout: float = 0.0
+    ):
         """
         __init__
 
@@ -144,9 +176,14 @@ class CrossAttention(nn.Module):
 
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
-    def forward(self, x: torch.Tensor, cross_x: torch.Tensor, 
-                causal_mask: bool = False, return_attn: bool = False, 
-                key_padding_mask: Optional[torch.Tensor] = None) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+    def forward(
+        self,
+        x: torch.Tensor,
+        cross_x: torch.Tensor,
+        causal_mask: bool = False,
+        return_attn: bool = False,
+        key_padding_mask: Optional[torch.Tensor] = None,
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         forward
 
@@ -167,9 +204,12 @@ class CrossAttention(nn.Module):
         Returns:
             Output tensor of shape (batch_size, seq_len, dim).
         """
-        assert x.dim() == 3 and cross_x.dim() == 3, "Input tensors must be 3D (batch_size, seq_len, dim)"
-        assert x.shape[2] == self.dim and cross_x.shape[2] == self.cross_dim, \
+        assert x.dim() == 3 and cross_x.dim() == 3, (
+            "Input tensors must be 3D (batch_size, seq_len, dim)"
+        )
+        assert x.shape[2] == self.dim and cross_x.shape[2] == self.cross_dim, (
             f"Input tensors must have last dimensions of size {self.dim} and {self.cross_dim}, got {x.shape[2]} and {cross_x.shape[2]}"
+        )
 
         batch_size, seq_len, _ = x.shape
         _, cross_seq_len, _ = cross_x.shape
@@ -181,12 +221,20 @@ class CrossAttention(nn.Module):
         k = self.k_proj(cross_x)
         v = self.v_proj(cross_x)
 
-        q = q.reshape(*interm_shape).transpose(1, 2)  # (batch_size, num_heads, seq_len, head_dim)
-        k = k.reshape(*interm_shape).transpose(1, 2)  # (batch_size, num_heads, cross_seq_len, head_dim)
-        v = v.reshape(*interm_shape).transpose(1, 2)  # (batch_size, num_heads, cross_seq_len, head_dim)
+        q = q.reshape(*interm_shape).transpose(
+            1, 2
+        )  # (batch_size, num_heads, seq_len, head_dim)
+        k = k.reshape(*interm_shape).transpose(
+            1, 2
+        )  # (batch_size, num_heads, cross_seq_len, head_dim)
+        v = v.reshape(*interm_shape).transpose(
+            1, 2
+        )  # (batch_size, num_heads, cross_seq_len, head_dim)
 
         # Calculate attention scores
-        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dim ** 0.5) # (batch_size, num_heads, seq_len, cross_seq_len)
+        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / (
+            self.head_dim**0.5
+        )  # (batch_size, num_heads, seq_len, cross_seq_len)
 
         # Apply masks if provided
         if causal_mask or key_padding_mask is not None:
@@ -194,7 +242,9 @@ class CrossAttention(nn.Module):
             # full_mask: True where masking is needed (either causal or padding)
 
             if causal_mask:
-                assert seq_len == cross_seq_len, "Causal mask requires seq_len and cross_seq_len to be equal"
+                assert seq_len == cross_seq_len, (
+                    "Causal mask requires seq_len and cross_seq_len to be equal"
+                )
                 warnings.warn(
                     "Using causal_mask=True in CrossAttention is unusual. "
                     "Causal masking is typically only used in self-attention, not cross-attention.",
@@ -203,30 +253,48 @@ class CrossAttention(nn.Module):
                 )
 
                 causal = torch.triu(
-                    torch.ones(seq_len, cross_seq_len, device=x.device, dtype=torch.bool), diagonal=1
+                    torch.ones(
+                        seq_len, cross_seq_len, device=x.device, dtype=torch.bool
+                    ),
+                    diagonal=1,
                 )
-                full_mask |= causal.unsqueeze(0).unsqueeze(0) # (1, 1, seq_len, cross_seq_len) for broadcasting
+                full_mask |= causal.unsqueeze(0).unsqueeze(
+                    0
+                )  # (1, 1, seq_len, cross_seq_len) for broadcasting
 
             if key_padding_mask is not None:
-                assert key_padding_mask.dim() == 2 and key_padding_mask.shape == (batch_size, cross_seq_len), \
-                    "key_padding_mask must be 2D with shape (batch_size, cross_seq_len)"
-                padding = key_padding_mask.unsqueeze(1).unsqueeze(2) # (batch_size, 1, 1, cross_seq_len) for broadcasting
+                assert key_padding_mask.dim() == 2 and key_padding_mask.shape == (
+                    batch_size,
+                    cross_seq_len,
+                ), "key_padding_mask must be 2D with shape (batch_size, cross_seq_len)"
+                padding = key_padding_mask.unsqueeze(1).unsqueeze(
+                    2
+                )  # (batch_size, 1, 1, cross_seq_len) for broadcasting
                 full_mask |= padding
 
-            mask_value = -1e9 if attn_scores.dtype == torch.float16 else float('-inf') # Better for mixed precision support
+            mask_value = (
+                -1e9 if attn_scores.dtype == torch.float16 else float("-inf")
+            )  # Better for mixed precision support
             attn_scores = attn_scores.masked_fill(full_mask, mask_value)
 
         # Apply softmax to get attention weights
-        attn_scores = attn_scores - attn_scores.max(dim=-1, keepdim=True).values # For numerical stability
-        attn_weights = self.dropout(F.softmax(attn_scores, dim=-1)) # (batch_size, num_heads, seq_len, cross_seq_len)
+        attn_scores = (
+            attn_scores - attn_scores.max(dim=-1, keepdim=True).values
+        )  # For numerical stability
+        attn_weights = self.dropout(
+            F.softmax(attn_scores, dim=-1)
+        )  # (batch_size, num_heads, seq_len, cross_seq_len)
 
-        output = torch.matmul(attn_weights, v) # (batch_size, num_heads, seq_len, head_dim)
+        output = torch.matmul(
+            attn_weights, v
+        )  # (batch_size, num_heads, seq_len, head_dim)
         output = output.transpose(1, 2).reshape(batch_size, seq_len, self.dim)
 
         if return_attn:
             return self.out_proj(output), attn_weights.to(dtype=torch.float32)
         else:
             return self.out_proj(output)
+
 
 class LayerNorm(nn.Module):
     """
@@ -262,8 +330,10 @@ class LayerNorm(nn.Module):
         Returns:
             Normalized tensor of the same shape as input.
         """
-        assert x.dim() >= 2, "Input tensor must have at least 2 dimensions (batch_size, features)"
-        
+        assert x.dim() >= 2, (
+            "Input tensor must have at least 2 dimensions (batch_size, features)"
+        )
+
         # Calculate mean and variance along the last dimension
         mean = x.mean(dim=-1, keepdim=True)
         var = x.var(dim=-1, keepdim=True, unbiased=False)
@@ -273,14 +343,21 @@ class LayerNorm(nn.Module):
 
         # Scale and shift
         return self.alphas * normalized_x + self.betas
-    
+
+
 class Upsample(nn.Module):
     """
     A basic implementation of an upsampling block that uses bilinear interpolation.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, scale_factor: Union[int, float] = 2, 
-                 mode: str = 'bilinear', align_corners: bool = True):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        scale_factor: Union[int, float] = 2,
+        mode: str = "bilinear",
+        align_corners: bool = True,
+    ):
         """
         __init__
 
@@ -297,9 +374,12 @@ class Upsample(nn.Module):
         self.scale_factor = scale_factor
         self.mode = mode
         self.align_corners = align_corners
-        self.conv_1x1 = nn.Conv2d(in_channels=in_channels, out_channels=in_channels, kernel_size=1)
-        self.out_conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, 
-                                  kernel_size=3, padding=1)
+        self.conv_1x1 = nn.Conv2d(
+            in_channels=in_channels, out_channels=in_channels, kernel_size=1
+        )
+        self.out_conv = nn.Conv2d(
+            in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -313,15 +393,23 @@ class Upsample(nn.Module):
         Returns:
             Upsampled tensor of shape (batch_size, channels, height * scale_factor, width * scale_factor).
         """
-        if self.mode in ['linear', 'bilinear', 'bicubic', 'trilinear']:
+        if self.mode in ["linear", "bilinear", "bicubic", "trilinear"]:
             align_corners = self.align_corners if self.align_corners else None
         else:
-            align_corners = None # align_corners is not used for nearest neighbor or area
-            
-        x = F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode, align_corners=align_corners)
+            align_corners = (
+                None  # align_corners is not used for nearest neighbor or area
+            )
+
+        x = F.interpolate(
+            x,
+            scale_factor=self.scale_factor,
+            mode=self.mode,
+            align_corners=align_corners,
+        )
         x = self.conv_1x1(x)
         return self.out_conv(x)
-    
+
+
 class GEGLU(nn.Module):
     """
     A custom activation function that applies the GEGLU (Gated Linear Unit) activation.
@@ -355,11 +443,14 @@ class GEGLU(nn.Module):
         Returns:
             Output tensor of shape (batch_size, ..., in_dim).
         """
-        assert x.dim() >= 2, "Input tensor must be at least 2D (batch_size, ..., in_dim)"
+        assert x.dim() >= 2, (
+            "Input tensor must be at least 2D (batch_size, ..., in_dim)"
+        )
 
         x, gate = self.linear_geglu_1(x).chunk(2, dim=-1)
         return self.linear_geglu_2(x * F.gelu(gate))
-    
+
+
 class MultiWaveletAct(nn.Module):
     """
     A custom activation function that applies a mixture of Gabor's like wavelets
@@ -369,9 +460,16 @@ class MultiWaveletAct(nn.Module):
     multi-frequency details in the data.
     """
 
-    def __init__(self, dim: int = 256, num_components: int = 4, freq_scale: float = 1.0, 
-                 scale: float = 1.0, activation: nn.Module = nn.ReLU(), 
-                 wavelet_only: bool = True, normalize: bool = True):
+    def __init__(
+        self,
+        dim: int = 256,
+        num_components: int = 4,
+        freq_scale: float = 1.0,
+        scale: float = 1.0,
+        activation: nn.Module = nn.ReLU(),
+        wavelet_only: bool = True,
+        normalize: bool = True,
+    ):
         """
         __init__
 
@@ -393,7 +491,7 @@ class MultiWaveletAct(nn.Module):
         self.wavelet_only = wavelet_only
 
         # Initialize wavelet parameters
-        init_freqs = torch.linspace(0.5, 3., num_components) * freq_scale
+        init_freqs = torch.linspace(0.5, 3.0, num_components) * freq_scale
         self.freq_scales = nn.Parameter(init_freqs + 0.1 * torch.randn(num_components))
         self.log_scales = nn.Parameter(torch.randn(num_components) * scale)
 
@@ -423,25 +521,38 @@ class MultiWaveletAct(nn.Module):
             Output tensor of shape (batch_size, ..., dim).
         """
         assert x.dim() >= 2, "Input tensor must be 2D (batch_size, ..., dim)"
-        assert x.shape[-1] == self.dim, \
+        assert x.shape[-1] == self.dim, (
             f"Input tensor must have last dimension of size {self.dim}, got {x.shape[-1]}"
-        
-        x_exp = x.unsqueeze(1) # Expand to (batch_size, 1, ..., dim)
+        )
 
-        freqs = self.freq_scales.view(self.num_components, *([1] * (x.dim() - 1))) # Expand to (num_components, ..., 1)
-        sigmas = torch.clamp(torch.exp(self.log_scales), min=1e-3).view(self.num_components, *([1] * (x.dim() - 1)))
+        x_exp = x.unsqueeze(1)  # Expand to (batch_size, 1, ..., dim)
 
-        print(f"Input shape: {x.shape}, Expanded shape: {x_exp.shape}, Frequencies shape: {freqs.shape}, Sigmas shape: {sigmas.shape}")
+        freqs = self.freq_scales.view(
+            self.num_components, *([1] * (x.dim() - 1))
+        )  # Expand to (num_components, ..., 1)
+        sigmas = torch.clamp(torch.exp(self.log_scales), min=1e-3).view(
+            self.num_components, *([1] * (x.dim() - 1))
+        )
+
+        print(
+            f"Input shape: {x.shape}, Expanded shape: {x_exp.shape}, Frequencies shape: {freqs.shape}, Sigmas shape: {sigmas.shape}"
+        )
 
         # Apply wavelet transformation
-        wavelets = torch.cos(freqs * x_exp) * torch.exp(-0.5 * (x_exp / sigmas) ** 2) # (batch_size, num_components, ..., dim)
+        wavelets = torch.cos(freqs * x_exp) * torch.exp(
+            -0.5 * (x_exp / sigmas) ** 2
+        )  # (batch_size, num_components, ..., dim)
 
-        weights = F.softmax(self.weights, dim=0).view(self.num_components, *([1] * (x.dim() - 1))) # Normalize weights across components
+        weights = F.softmax(self.weights, dim=0).view(
+            self.num_components, *([1] * (x.dim() - 1))
+        )  # Normalize weights across components
         result = torch.sum(wavelets * weights, dim=1, keepdim=False)
 
         if self.wavelet_only:
             result = self.project(result)
-            return self.activation(self.layer_norm(result)) # Apply activation and normalization
+            return self.activation(
+                self.layer_norm(result)
+            )  # Apply activation and normalization
         else:
             result = self.project(torch.cat([x, result], dim=-1))
             return self.activation(self.layer_norm(result))

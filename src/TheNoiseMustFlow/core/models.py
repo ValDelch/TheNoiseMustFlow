@@ -1,10 +1,9 @@
 """
 models.py
 
-The module implements the different deep learning models that are useful in the diffusion pipeline. 
+The module implements the different deep learning models that are useful in the diffusion pipeline.
 The main architectures are the U-Net used to sample noise, the VAE to build latent representations of images.
 """
-
 
 from __future__ import annotations
 from typing import Type, Union
@@ -15,9 +14,18 @@ import yaml
 import torch
 from torch import nn
 
-from TheNoiseMustFlow.core.basic_components.basic_blocks import BasicResidualBlock, BasicAttentionBlock
-from TheNoiseMustFlow.core.basic_components.encoder_blocks import VAEncoderBlock, UNetEncoderBlock
-from TheNoiseMustFlow.core.basic_components.decoder_blocks import VADecoderBlock, UNetDecoderBlock
+from TheNoiseMustFlow.core.basic_components.basic_blocks import (
+    BasicResidualBlock,
+    BasicAttentionBlock,
+)
+from TheNoiseMustFlow.core.basic_components.encoder_blocks import (
+    VAEncoderBlock,
+    UNetEncoderBlock,
+)
+from TheNoiseMustFlow.core.basic_components.decoder_blocks import (
+    VADecoderBlock,
+    UNetDecoderBlock,
+)
 from TheNoiseMustFlow.core.basic_components.encodings import TimeEncoding
 
 
@@ -26,7 +34,7 @@ TensorOrMore = Union[
     torch.Tensor,
     tuple[torch.Tensor, tuple],
     tuple[torch.Tensor, torch.Tensor],
-    tuple[torch.Tensor, tuple, torch.Tensor]
+    tuple[torch.Tensor, tuple, torch.Tensor],
 ]
 
 
@@ -38,9 +46,13 @@ class VAE(nn.Module):
     input into a latent representation, while the decoder reconstructs the input from the latent space.
     """
 
-    def __init__(self, input_shape: tuple, config_file: str,
-                 ResidualBlock: Type[nn.Module] = BasicResidualBlock,
-                 AttentionBlock: Type[nn.Module] = BasicAttentionBlock):
+    def __init__(
+        self,
+        input_shape: tuple,
+        config_file: str,
+        ResidualBlock: Type[nn.Module] = BasicResidualBlock,
+        AttentionBlock: Type[nn.Module] = BasicAttentionBlock,
+    ):
         """
         __init__
 
@@ -53,7 +65,9 @@ class VAE(nn.Module):
             AttentionBlock: Class for the attention block, defaults to BasicAttentionBlock.
         """
         super(VAE, self).__init__()
-        assert len(input_shape) == 3, "Input shape must be a tuple of length 3 (channels, height, width)."
+        assert len(input_shape) == 3, (
+            "Input shape must be a tuple of length 3 (channels, height, width)."
+        )
 
         in_channels = input_shape[0]
 
@@ -61,25 +75,31 @@ class VAE(nn.Module):
             in_channels=in_channels,
             config_file=config_file,
             ResidualBlock=ResidualBlock,
-            AttentionBlock=AttentionBlock
+            AttentionBlock=AttentionBlock,
         )
         self.decoder = VADecoderBlock(
             in_channels=in_channels,
             config_file=config_file,
             ResidualBlock=ResidualBlock,
-            AttentionBlock=AttentionBlock
+            AttentionBlock=AttentionBlock,
         )
 
         # Extract the latent dimension from the encoder
         dummy_input = torch.zeros((1, *input_shape))
         with torch.no_grad():
             out = self.encoder.encoder(dummy_input)
-        
+
         self.latent_dim = out.shape[1] // 2
         self.latent_shape = (self.latent_dim, *out.shape[2:])
-        
-    def forward(self, x: torch.Tensor, noise: torch.Tensor, return_stats: bool = False, 
-                rescale: bool = False, return_rec: bool = False) -> TensorOrMore:
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        noise: torch.Tensor,
+        return_stats: bool = False,
+        rescale: bool = False,
+        return_rec: bool = False,
+    ) -> TensorOrMore:
         """
         forward
 
@@ -110,7 +130,8 @@ class VAE(nn.Module):
         if return_stats:
             return out, (mean, logvar)
         return out
-    
+
+
 class UNet(nn.Module):
     """
     U-Net model.
@@ -120,9 +141,13 @@ class UNet(nn.Module):
     the latent space, with skip connections.
     """
 
-    def __init__(self, latent_dim: int, config_file: str,
-                 ResidualBlock: Type[nn.Module] = BasicResidualBlock,
-                 AttentionBlock: Type[nn.Module] = BasicAttentionBlock):
+    def __init__(
+        self,
+        latent_dim: int,
+        config_file: str,
+        ResidualBlock: Type[nn.Module] = BasicResidualBlock,
+        AttentionBlock: Type[nn.Module] = BasicAttentionBlock,
+    ):
         """
         __init__
 
@@ -140,17 +165,19 @@ class UNet(nn.Module):
             latent_dim=latent_dim,
             config_file=config_file,
             ResidualBlock=ResidualBlock,
-            AttentionBlock=AttentionBlock
+            AttentionBlock=AttentionBlock,
         )
         self.decoder = UNetDecoderBlock(
             latent_dim=latent_dim,
             config_file=config_file,
             ResidualBlock=ResidualBlock,
-            AttentionBlock=AttentionBlock
+            AttentionBlock=AttentionBlock,
         )
         self.d_time = self.encoder.d_time
 
-    def forward(self, x: torch.Tensor, context: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, context: torch.Tensor, time: torch.Tensor
+    ) -> torch.Tensor:
         """
         forward
 
@@ -167,11 +194,14 @@ class UNet(nn.Module):
         """
         # Pass through the encoder
         out, skip_connections = self.encoder(x, context=context, time=time)
-        
+
         # Pass through the decoder with skip connections
-        out = self.decoder(out, skip_connections=skip_connections, context=context, time=time)
+        out = self.decoder(
+            out, skip_connections=skip_connections, context=context, time=time
+        )
 
         return out
+
 
 class Diffusion(nn.Module):
     """
@@ -180,10 +210,14 @@ class Diffusion(nn.Module):
     This model is basically a U-Net along with a time step embedding.
     """
 
-    def __init__(self, latent_dim: int, config_file: str,
-                 ResidualBlock: Type[nn.Module] = BasicResidualBlock,
-                 AttentionBlock: Type[nn.Module] = BasicAttentionBlock,
-                 TimeEncoder: Type[nn.Module] = TimeEncoding):
+    def __init__(
+        self,
+        latent_dim: int,
+        config_file: str,
+        ResidualBlock: Type[nn.Module] = BasicResidualBlock,
+        AttentionBlock: Type[nn.Module] = BasicAttentionBlock,
+        TimeEncoder: Type[nn.Module] = TimeEncoding,
+    ):
         """
         __init__
 
@@ -202,13 +236,15 @@ class Diffusion(nn.Module):
             latent_dim=latent_dim,
             config_file=config_file,
             ResidualBlock=ResidualBlock,
-            AttentionBlock=AttentionBlock
+            AttentionBlock=AttentionBlock,
         )
 
         d_time = self.unet.d_time
         self.time_encoder = TimeEncoder(dim=d_time)
 
-    def forward(self, x: torch.Tensor, t: torch.Tensor, context: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, t: torch.Tensor, context: torch.Tensor
+    ) -> torch.Tensor:
         """
         forward
 

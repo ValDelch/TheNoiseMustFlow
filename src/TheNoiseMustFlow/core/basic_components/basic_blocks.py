@@ -7,7 +7,6 @@ DL models, like residual blocks, attention blocks, etc.
 # TODO: investigate the use of https://docs.pytorch.org/torchtune/0.4/generated/torchtune.modules.RotaryPositionalEmbeddings.html
 """
 
-
 from __future__ import annotations
 from typing import Optional, Union, Type
 import warnings
@@ -15,7 +14,12 @@ import warnings
 import torch
 from torch import nn
 
-from TheNoiseMustFlow.core.basic_components.functional_blocks import LayerNorm, SelfAttention, CrossAttention, GEGLU
+from TheNoiseMustFlow.core.basic_components.functional_blocks import (
+    LayerNorm,
+    SelfAttention,
+    CrossAttention,
+    GEGLU,
+)
 
 
 class BasicResidualBlock(nn.Module):
@@ -26,11 +30,19 @@ class BasicResidualBlock(nn.Module):
     This block can also apply context conditioning if a conditioning dimension is provided.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int = 3,
-                 groups: int = 32, activation: Optional[Type[nn.Module]] = None, 
-                 padding: Union[int, str] = 'same', use_bias: bool = True, 
-                 padding_mode: str = 'zeros', dropout: float = 0.0, 
-                 d_context: Optional[int] = None):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        groups: int = 32,
+        activation: Optional[Type[nn.Module]] = None,
+        padding: Union[int, str] = "same",
+        use_bias: bool = True,
+        padding_mode: str = "zeros",
+        dropout: float = 0.0,
+        d_context: Optional[int] = None,
+    ):
         """
         __init__
 
@@ -51,23 +63,36 @@ class BasicResidualBlock(nn.Module):
         super(BasicResidualBlock, self).__init__()
 
         self.group_norm1 = nn.GroupNorm(num_groups=groups, num_channels=in_channels)
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, 
-                               padding=padding, bias=use_bias, padding_mode=padding_mode)
-        
+        self.conv1 = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            padding=padding,
+            bias=use_bias,
+            padding_mode=padding_mode,
+        )
+
         if d_context is not None:
             self.context_proj = nn.Linear(d_context, out_channels)
-        
+
         self.group_norm2 = nn.GroupNorm(num_groups=groups, num_channels=out_channels)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=kernel_size, 
-                               padding=padding, bias=use_bias, padding_mode=padding_mode)
-        
+        self.conv2 = nn.Conv2d(
+            out_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            padding=padding,
+            bias=use_bias,
+            padding_mode=padding_mode,
+        )
+
         self.activation = activation if activation is not None else nn.Identity()
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
         # Skip connection
         if in_channels != out_channels:
-            self.skip_connection = nn.Conv2d(in_channels, out_channels, kernel_size=1, 
-                                             padding=0, bias=use_bias)
+            self.skip_connection = nn.Conv2d(
+                in_channels, out_channels, kernel_size=1, padding=0, bias=use_bias
+            )
         else:
             self.skip_connection = nn.Identity()
 
@@ -84,13 +109,19 @@ class BasicResidualBlock(nn.Module):
         Returns:
             Tensor with context applied.
         """
-        assert context.dim() == 2, "Conditioning tensor must be 2D (batch_size, d_context)"
-        assert hasattr(self, 'context_proj'), "You must define a d_context to use conditioning projection"
+        assert context.dim() == 2, (
+            "Conditioning tensor must be 2D (batch_size, d_context)"
+        )
+        assert hasattr(self, "context_proj"), (
+            "You must define a d_context to use conditioning projection"
+        )
 
         context = self.context_proj(self.activation(context))
         return x + context.unsqueeze(-1).unsqueeze(-1)
 
-    def forward(self, x: torch.Tensor, context: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, context: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         forward
 
@@ -103,28 +134,32 @@ class BasicResidualBlock(nn.Module):
         Returns:
             Output tensor of shape (batch_size, out_channels, height, width).
         """
-        assert x.dim() == 4, "Input tensor must be 4D (batch_size, channels, height, width)"
-        if context is None and hasattr(self, 'context_proj'):
+        assert x.dim() == 4, (
+            "Input tensor must be 4D (batch_size, channels, height, width)"
+        )
+        if context is None and hasattr(self, "context_proj"):
             warnings.warn(
                 f"[{self.__class__.__name__}] Context tensor is None, but a d_context was previously defined."
-                "Skipping context attention.", 
-                UserWarning, stacklevel=2
+                "Skipping context attention.",
+                UserWarning,
+                stacklevel=2,
             )
-        
+
         residual = x
-        
+
         x = self.group_norm1(x)
         x = self.activation(x)
         x = self.conv1(x)
 
         if context is not None:
             x = self.apply_context(x, context)
-        
+
         x = self.group_norm2(x)
         x = self.activation(x)
         x = self.conv2(x)
-        
+
         return self.dropout(x + self.skip_connection(residual))
+
 
 class BasicAttentionBlock(nn.Module):
     """
@@ -135,9 +170,16 @@ class BasicAttentionBlock(nn.Module):
     It uses GEGLU activation by default, but can accept any activation function.
     """
 
-    def __init__(self, channels: int, num_heads: int = 8, groups: int = 32, 
-                 activation: Optional[nn.Module] = None, use_bias: bool = True,
-                 dropout: float = 0.0, d_context: Optional[int] = None):
+    def __init__(
+        self,
+        channels: int,
+        num_heads: int = 8,
+        groups: int = 32,
+        activation: Optional[nn.Module] = None,
+        use_bias: bool = True,
+        dropout: float = 0.0,
+        d_context: Optional[int] = None,
+    ):
         """
         __init__
 
@@ -153,12 +195,18 @@ class BasicAttentionBlock(nn.Module):
             d_context: Optional conditioning dimension. If provided, the block can use it for conditioning.
         """
         super(BasicAttentionBlock, self).__init__()
-        assert channels % groups == 0, "Channels must be divisible by groups for GroupNorm"
-        assert channels % num_heads == 0, "Channels must be divisible by num_heads for SelfAttention"
+        assert channels % groups == 0, (
+            "Channels must be divisible by groups for GroupNorm"
+        )
+        assert channels % num_heads == 0, (
+            "Channels must be divisible by num_heads for SelfAttention"
+        )
 
         # Input block
         self.group_norm = nn.GroupNorm(num_groups=groups, num_channels=channels)
-        self.conv_input = nn.Conv2d(channels, channels, kernel_size=1, padding=0, bias=use_bias)
+        self.conv_input = nn.Conv2d(
+            channels, channels, kernel_size=1, padding=0, bias=use_bias
+        )
 
         # Self-attention block
         self.layer_norm_1 = LayerNorm(channels)
@@ -174,12 +222,16 @@ class BasicAttentionBlock(nn.Module):
         # Activation block
         self.layer_norm_2 = LayerNorm(channels)
         if activation is None:
-            self.activation = GEGLU(in_dim=channels, inter_dim=4 * channels, bias=use_bias)
+            self.activation = GEGLU(
+                in_dim=channels, inter_dim=4 * channels, bias=use_bias
+            )
         else:
             self.activation = activation
-        
+
         # Output block
-        self.conv_output = nn.Conv2d(channels, channels, kernel_size=1, padding=0, bias=use_bias)
+        self.conv_output = nn.Conv2d(
+            channels, channels, kernel_size=1, padding=0, bias=use_bias
+        )
 
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
@@ -196,18 +248,26 @@ class BasicAttentionBlock(nn.Module):
         Returns:
             Tensor with context applied.
         """
-        assert context.dim() == 3, "Context tensor must be 2D (batch_size, seq_len, d_context)"
-        assert hasattr(self, 'attention_context'), "Context attention is not defined in this block"
+        assert context.dim() == 3, (
+            "Context tensor must be 2D (batch_size, seq_len, d_context)"
+        )
+        assert hasattr(self, "attention_context"), (
+            "Context attention is not defined in this block"
+        )
 
         # Applying the optional cross-attention
         short_term_residual = x
 
         x = self.layer_norm_context(x)
-        x = self.attention_context(x, context, causal_mask=False, return_attn=False, key_padding_mask=None)
+        x = self.attention_context(
+            x, context, causal_mask=False, return_attn=False, key_padding_mask=None
+        )
 
         return x + short_term_residual
-    
-    def forward(self, x: torch.Tensor, context: Optional[torch.Tensor] = None) -> torch.Tensor:
+
+    def forward(
+        self, x: torch.Tensor, context: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         forward
 
@@ -220,12 +280,15 @@ class BasicAttentionBlock(nn.Module):
         Returns:
             Output tensor of shape (batch_size, channels, height, width).
         """
-        assert x.dim() == 4, "Input tensor must be 4D (batch_size, channels, height, width)"
-        if context is None and hasattr(self, 'attention_context'):
+        assert x.dim() == 4, (
+            "Input tensor must be 4D (batch_size, channels, height, width)"
+        )
+        if context is None and hasattr(self, "attention_context"):
             warnings.warn(
                 f"[{self.__class__.__name__}] Context tensor is None, but a d_context was previously defined."
-                "Skipping context attention.", 
-                UserWarning, stacklevel=2
+                "Skipping context attention.",
+                UserWarning,
+                stacklevel=2,
             )
 
         # Input block
@@ -235,7 +298,9 @@ class BasicAttentionBlock(nn.Module):
         x = self.conv_input(x)
 
         n, c, h, w = x.shape
-        x = x.view(n, c, h * w).permute(0, 2, 1)  # (batch_size, height * width, channels)
+        x = x.view(n, c, h * w).permute(
+            0, 2, 1
+        )  # (batch_size, height * width, channels)
 
         # Self-attention block
         short_term_residual = x
@@ -260,15 +325,22 @@ class BasicAttentionBlock(nn.Module):
         x = x.transpose(-1, -2).view(n, c, h, w)
 
         return self.dropout(self.conv_output(x) + long_term_residual)
-    
+
+
 class BasicFeedForwardBlock(nn.Module):
     """
     A basic feed-forward block that applies two linear transformations.
     """
 
-    def __init__(self, dim: int, d_ff: int, out_features: Optional[int] = None,
-                 activation: nn.Module = nn.GELU(), layer_norm: bool = True, 
-                 dropout: float = 0.0):
+    def __init__(
+        self,
+        dim: int,
+        d_ff: int,
+        out_features: Optional[int] = None,
+        activation: nn.Module = nn.GELU(),
+        layer_norm: bool = True,
+        dropout: float = 0.0,
+    ):
         """
         __init__
 
@@ -285,7 +357,9 @@ class BasicFeedForwardBlock(nn.Module):
         super(BasicFeedForwardBlock, self).__init__()
 
         self.linear1 = nn.Linear(dim, d_ff, bias=True)
-        self.linear2 = nn.Linear(d_ff, out_features if out_features is not None else dim, bias=True)
+        self.linear2 = nn.Linear(
+            d_ff, out_features if out_features is not None else dim, bias=True
+        )
 
         self.activation = activation
         self.layer_norm = LayerNorm(d_ff) if layer_norm else nn.Identity()
@@ -305,10 +379,10 @@ class BasicFeedForwardBlock(nn.Module):
             Output tensor of shape (batch_size, ..., out_features).
         """
         assert x.dim() >= 2, "Input tensor must be at least 2D (batch_size, ..., dim)"
-        
+
         h = self.linear1(x)
         h = self.activation(h)
         h = self.layer_norm(h)
         out = self.linear2(h)
-        
+
         return self.dropout(out)

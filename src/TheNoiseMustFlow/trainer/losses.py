@@ -4,7 +4,6 @@ losses.py
 This module implements various loss functions used in the training of diffusion models.
 """
 
-
 from __future__ import annotations
 
 import torch
@@ -12,7 +11,9 @@ from torch import nn
 from torch.nn import functional as F
 
 
-def mse_loss(x: torch.Tensor, x_recon: torch.Tensor, reduction: str = 'mean') -> torch.Tensor:
+def mse_loss(
+    x: torch.Tensor, x_recon: torch.Tensor, reduction: str = "mean"
+) -> torch.Tensor:
     """
     mse_loss
 
@@ -31,8 +32,10 @@ def mse_loss(x: torch.Tensor, x_recon: torch.Tensor, reduction: str = 'mean') ->
     assert x.shape == x_recon.shape, "Input tensors must have the same shape"
     return F.mse_loss(x_recon, x, reduction=reduction)
 
-def huber_noise_loss(x: torch.Tensor, x_recon: torch.Tensor, delta: float = 1.0, 
-                     reduction: str = 'mean') -> torch.Tensor:
+
+def huber_noise_loss(
+    x: torch.Tensor, x_recon: torch.Tensor, delta: float = 1.0, reduction: str = "mean"
+) -> torch.Tensor:
     """
     huber_noise_loss
 
@@ -45,15 +48,21 @@ def huber_noise_loss(x: torch.Tensor, x_recon: torch.Tensor, delta: float = 1.0,
         delta: The point where the loss function changes from quadratic to linear. Default is 1.0.
         reduction: Specifies the reduction to apply to the output:
             can be 'mean' or 'sum'. Default is 'mean'.
-    
+
     Returns:
         A tensor containing the computed Huber loss.
     """
     assert x.shape == x_recon.shape, "Input tensors must have the same shape"
     return F.smooth_l1_loss(x_recon, x, beta=delta, reduction=reduction)
 
-def snr_weighted_mse_loss(x: torch.Tensor, x_recon: torch.Tensor, snr: torch.Tensor,
-                          gamma: float = 5.0, reduction: str = 'mean') -> torch.Tensor:
+
+def snr_weighted_mse_loss(
+    x: torch.Tensor,
+    x_recon: torch.Tensor,
+    snr: torch.Tensor,
+    gamma: float = 5.0,
+    reduction: str = "mean",
+) -> torch.Tensor:
     """
     snr_weighted_mse_loss
 
@@ -75,17 +84,18 @@ def snr_weighted_mse_loss(x: torch.Tensor, x_recon: torch.Tensor, snr: torch.Ten
     assert x.shape == x_recon.shape, "Input tensors must have the same shape"
     assert snr.dim() == 1, "SNR must be a 1D tensor"
     assert snr.shape[0] == x.shape[0], "SNR must match the batch size of x and x_recon"
-    assert gamma >= 1., "gamma must be greater than 1"
+    assert gamma >= 1.0, "gamma must be greater than 1"
 
     weights = gamma / (snr + gamma)
-    mse = F.mse_loss(x_recon, x, reduction='none').mean(dim=[1, 2, 3])
+    mse = F.mse_loss(x_recon, x, reduction="none").mean(dim=[1, 2, 3])
 
-    if reduction == 'mean':
+    if reduction == "mean":
         return (weights * mse).mean()
-    elif reduction == 'sum':
+    elif reduction == "sum":
         return (weights * mse).sum()
     else:
         raise ValueError("Reduction must be 'mean' or 'sum'")
+
 
 def kl_divergence(mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
     """
@@ -104,8 +114,14 @@ def kl_divergence(mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
     assert mu.shape == logvar.shape, "mu and logvar must have the same shape"
     return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
-def VAE_loss(x: torch.Tensor, x_recon: torch.Tensor, mu: torch.Tensor, 
-             logvar: torch.Tensor, beta: float = 1.) -> torch.Tensor:
+
+def VAE_loss(
+    x: torch.Tensor,
+    x_recon: torch.Tensor,
+    mu: torch.Tensor,
+    logvar: torch.Tensor,
+    beta: float = 1.0,
+) -> torch.Tensor:
     """
     VAE_loss
 
@@ -122,12 +138,17 @@ def VAE_loss(x: torch.Tensor, x_recon: torch.Tensor, mu: torch.Tensor,
     Returns:
         A tensor containing the total VAE loss.
     """
-    recon_loss = mse_loss(x, x_recon, reduction='sum')
+    recon_loss = mse_loss(x, x_recon, reduction="sum")
     kld_loss = kl_divergence(mu, logvar)
     return recon_loss + beta * kld_loss
 
-def cross_entropy(logits: torch.Tensor, targets: torch.Tensor, reduction: str = 'mean', 
-                  weight: float = 1.0) -> torch.Tensor:
+
+def cross_entropy(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    reduction: str = "mean",
+    weight: float = 1.0,
+) -> torch.Tensor:
     """
     cross_entropy
 
@@ -147,6 +168,6 @@ def cross_entropy(logits: torch.Tensor, targets: torch.Tensor, reduction: str = 
     assert logits.shape == targets.shape, "Logits and targets must have the same shape"
     loss_fn = nn.BCEWithLogitsLoss(
         pos_weight=torch.ones(1, 1, 1, device=logits.device) * weight,
-        reduction=reduction
+        reduction=reduction,
     )
     return loss_fn(logits, targets.float())
