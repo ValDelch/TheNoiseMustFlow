@@ -251,7 +251,7 @@ Valentin Delchevalerie - 📧 vdelchevalerie@gmail.com - 🔗 [LinkedIn](https:/
 
 ## 🧠 Acknowledgments
 
-This project is based on several different resources. Here is a list of some of the major inspirations:
+This project is based on several resources. Here is a list of some of the major inspirations:
 
 * [Ho et al., 2020] — (https://arxiv.org/abs/2006.11239)
 * [Umar Jamil](https://github.com/hkproj/pytorch-stable-diffusion) — and his video "[Coding Stable Diffusion from scratch in PyTorch](https://www.youtube.com/watch?v=ZBKpAp_6TGI&t=13980s)"
