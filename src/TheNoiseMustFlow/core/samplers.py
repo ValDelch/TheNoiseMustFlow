@@ -9,12 +9,11 @@ defined in the NoiseScheduler class and the diffusion model.
 There are two main types of samplers:
     1. DDPMSampler: A sampler that uses the DDPM (Denoising Diffusion Probabilistic Models)
     2. DDIMSampler: A sampler that uses the DDIM (Denoising Diffusion Implicit Models)
-    
+
 DDIM sampler requires fewer steps than DDPM to generate samples, making it more efficient.
 More specifically, DDPM samples with the same number of steps as the noising process,
 while DDIM can sample with fewer steps, allowing for faster generation of samples.
 """
-
 
 from __future__ import annotations
 from typing import Union, Callable, Optional
@@ -51,9 +50,10 @@ class DDPMSampler(torch.nn.Module):
                 Default is True.
         """
         super(DDPMSampler, self).__init__()
-        assert isinstance(noise_scheduler, NoiseScheduler), \
+        assert isinstance(noise_scheduler, NoiseScheduler), (
             "noise_scheduler must be an instance of NoiseScheduler"
-        
+        )
+
         self.use_tqdm = use_tqdm
 
         self.steps = noise_scheduler.steps
@@ -63,7 +63,9 @@ class DDPMSampler(torch.nn.Module):
 
         self.generator = noise_scheduler.generator
 
-    def sample_prev_step(self, x: torch.Tensor, t: int, pred_noise: torch.Tensor) -> torch.Tensor:
+    def sample_prev_step(
+        self, x: torch.Tensor, t: int, pred_noise: torch.Tensor
+    ) -> torch.Tensor:
         """
         sample_prev_step
 
@@ -89,16 +91,30 @@ class DDPMSampler(torch.nn.Module):
         if t != 0:
             z = torch.randn(x.shape, generator=self.generator, device=x.device)
 
-            mean = (1./ torch.sqrt(self.alphas[t])) * (x - (self.betas[t] / torch.sqrt(1. - self.alphas_cumprod[t])) * pred_noise)
-            var = ((1. - self.alphas_cumprod[t-1]) / (1. - self.alphas_cumprod[t])) * self.betas[t]
+            mean = (1.0 / torch.sqrt(self.alphas[t])) * (
+                x
+                - (self.betas[t] / torch.sqrt(1.0 - self.alphas_cumprod[t]))
+                * pred_noise
+            )
+            var = (
+                (1.0 - self.alphas_cumprod[t - 1]) / (1.0 - self.alphas_cumprod[t])
+            ) * self.betas[t]
             sigma = torch.sqrt(var)
 
             return mean + sigma * z
         else:
-            return (x - torch.sqrt(1. - self.alphas_cumprod[t]) * pred_noise) / torch.sqrt(self.alphas_cumprod[t])
-    
-    def sample(self, x: torch.Tensor, pred_noise_func: Callable, func_inputs: dict = {},
-               return_intermediates: bool = False, return_step: int = 50) -> Union[torch.Tensor, list[torch.Tensor]]:
+            return (
+                x - torch.sqrt(1.0 - self.alphas_cumprod[t]) * pred_noise
+            ) / torch.sqrt(self.alphas_cumprod[t])
+
+    def sample(
+        self,
+        x: torch.Tensor,
+        pred_noise_func: Callable,
+        func_inputs: dict = {},
+        return_intermediates: bool = False,
+        return_step: int = 50,
+    ) -> Union[torch.Tensor, list[torch.Tensor]]:
         """
         sample
 
@@ -119,13 +135,15 @@ class DDPMSampler(torch.nn.Module):
         Returns:
             The final sample tensor after sampling from x_{t} to x_{0}.
         """
-        assert callable(pred_noise_func), "pre_noise_func must be a callable that takes x and t"
+        assert callable(pred_noise_func), (
+            "pre_noise_func must be a callable that takes x and t"
+        )
         self._validate_xt(x, self.steps - 1)
 
         # Sample from x_{t} to x_{0}
         intermediates = []
         pbar = tqdm(range(self.steps), desc="Sampling", disable=not self.use_tqdm)
-        for step in reversed(pbar): # steps-1, ..., 1, 0
+        for step in reversed(pbar):  # steps-1, ..., 1, 0
             with torch.no_grad():
                 pred_noise = pred_noise_func(
                     x, torch.tensor([step], device=x.device), **func_inputs
@@ -133,7 +151,7 @@ class DDPMSampler(torch.nn.Module):
             x = self.sample_prev_step(x, step, pred_noise)
             if return_intermediates and step % return_step == 0:
                 intermediates.append(x.clone())
-        
+
         if return_intermediates:
             return intermediates
         else:
@@ -143,13 +161,16 @@ class DDPMSampler(torch.nn.Module):
         """
         Validate the step index or tensor of indices.
         """
-        assert x.dim() in [3, 4], "x must be a 3D or 4D tensor (channels, height, width) or (batch_size, channels, height, width)"
+        assert x.dim() in [3, 4], (
+            "x must be a 3D or 4D tensor (channels, height, width) or (batch_size, channels, height, width)"
+        )
 
         if isinstance(t, int):
             assert 0 <= t < self.steps, "t must be in the range [0, steps["
         else:
             raise TypeError("t must be an int")
-        
+
+
 class DDIMSampler(torch.nn.Module):
     """
     DDIM Sampler
@@ -163,8 +184,13 @@ class DDIMSampler(torch.nn.Module):
     indexes in a monotonically decreasing manner.
     """
 
-    def __init__(self, noise_scheduler: NoiseScheduler, steps: int = 50,
-                 eta: float = 0.0, use_tqdm: bool = True):
+    def __init__(
+        self,
+        noise_scheduler: NoiseScheduler,
+        steps: int = 50,
+        eta: float = 0.0,
+        use_tqdm: bool = True,
+    ):
         """
         __init__
 
@@ -179,22 +205,28 @@ class DDIMSampler(torch.nn.Module):
                 Default is True.
         """
         super(DDIMSampler, self).__init__()
-        assert isinstance(noise_scheduler, NoiseScheduler), \
+        assert isinstance(noise_scheduler, NoiseScheduler), (
             "noise_scheduler must be an instance of NoiseScheduler"
-        assert noise_scheduler.steps % steps == 0, \
+        )
+        assert noise_scheduler.steps % steps == 0, (
             "steps must be a divisor of noise_scheduler.steps"
-        
+        )
+
         self.use_tqdm = use_tqdm
 
         self.steps = steps
-        self.steps_list = list(range(0, noise_scheduler.steps, noise_scheduler.steps // steps))
+        self.steps_list = list(
+            range(0, noise_scheduler.steps, noise_scheduler.steps // steps)
+        )
 
         self.alphas_cumprod = noise_scheduler.alphas_cumprod
         self.eta = eta
 
         self.generator = noise_scheduler.generator
 
-    def sample_prev_step(self, x: torch.Tensor, t: int, pred_noise: torch.Tensor) -> torch.Tensor:
+    def sample_prev_step(
+        self, x: torch.Tensor, t: int, pred_noise: torch.Tensor
+    ) -> torch.Tensor:
         """
         sample_prev_step
 
@@ -221,25 +253,42 @@ class DDIMSampler(torch.nn.Module):
         alphas_cumprod_t = self.alphas_cumprod[real_t]
 
         # Estimate x_0 from x_t
-        x0_pred = (x - torch.sqrt(1. - alphas_cumprod_t) * pred_noise) / torch.sqrt(alphas_cumprod_t)
+        x0_pred = (x - torch.sqrt(1.0 - alphas_cumprod_t) * pred_noise) / torch.sqrt(
+            alphas_cumprod_t
+        )
 
         if t != 0:
             real_t_prev = self.steps_list[t - 1]
             alphas_cumprod_t_prev = self.alphas_cumprod[real_t_prev]
 
             # Compute the direction pointing to x_{t-1}
-            sigma_t = self.eta * torch.sqrt((1. - alphas_cumprod_t_prev) / (1. - alphas_cumprod_t) * \
-                (1. - alphas_cumprod_t / alphas_cumprod_t_prev))
-            noise = torch.randn(x.shape, generator=self.generator, device=x.device) if self.eta > 0 else 0.0
-            
-            return torch.sqrt(alphas_cumprod_t_prev) * x0_pred + \
-                torch.sqrt(1. - alphas_cumprod_t_prev - sigma_t**2) * pred_noise + \
-                sigma_t * noise
+            sigma_t = self.eta * torch.sqrt(
+                (1.0 - alphas_cumprod_t_prev)
+                / (1.0 - alphas_cumprod_t)
+                * (1.0 - alphas_cumprod_t / alphas_cumprod_t_prev)
+            )
+            noise = (
+                torch.randn(x.shape, generator=self.generator, device=x.device)
+                if self.eta > 0
+                else 0.0
+            )
+
+            return (
+                torch.sqrt(alphas_cumprod_t_prev) * x0_pred
+                + torch.sqrt(1.0 - alphas_cumprod_t_prev - sigma_t**2) * pred_noise
+                + sigma_t * noise
+            )
         else:
             return x0_pred
-    
-    def sample(self, x: torch.Tensor, pred_noise_func: Callable, func_inputs: dict = {},
-               return_intermediates: bool = False, return_step: int = 1) -> Union[torch.Tensor, list[torch.Tensor]]:
+
+    def sample(
+        self,
+        x: torch.Tensor,
+        pred_noise_func: Callable,
+        func_inputs: dict = {},
+        return_intermediates: bool = False,
+        return_step: int = 1,
+    ) -> Union[torch.Tensor, list[torch.Tensor]]:
         """
         sample
 
@@ -258,16 +307,20 @@ class DDIMSampler(torch.nn.Module):
         Returns:
             The final sample tensor after sampling from x_{t} to x_{0}.
         """
-        assert callable(pred_noise_func), "pre_noise_func must be a callable that takes x and t"
+        assert callable(pred_noise_func), (
+            "pre_noise_func must be a callable that takes x and t"
+        )
         self._validate_xt(x, self.steps - 1)
 
         # Sample from x_{t} to x_{0}
         intermediates = []
         pbar = tqdm(range(self.steps), desc="Sampling", disable=not self.use_tqdm)
-        for step in reversed(pbar): # steps-1, ..., 1, 0
+        for step in reversed(pbar):  # steps-1, ..., 1, 0
             with torch.no_grad():
                 pred_noise = pred_noise_func(
-                    x, torch.tensor([self.steps_list[step]], device=x.device), **func_inputs
+                    x,
+                    torch.tensor([self.steps_list[step]], device=x.device),
+                    **func_inputs,
                 )
             x = self.sample_prev_step(x, step, pred_noise)
             if return_intermediates and step % return_step == 0:
@@ -282,7 +335,9 @@ class DDIMSampler(torch.nn.Module):
         """
         Validate the step index or tensor of indices.
         """
-        assert x.dim() in [3, 4], "x must be a 3D or 4D tensor (channels, height, width) or (batch_size, channels, height, width)"
+        assert x.dim() in [3, 4], (
+            "x must be a 3D or 4D tensor (channels, height, width) or (batch_size, channels, height, width)"
+        )
 
         if isinstance(t, int):
             assert 0 <= t < self.steps, "t must be in the range [0, steps["

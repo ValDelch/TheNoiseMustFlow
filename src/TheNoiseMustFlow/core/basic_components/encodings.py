@@ -4,7 +4,6 @@ encodings.py
 This module implements several positional encoding methods.
 """
 
-
 from __future__ import annotations
 from typing import Union
 
@@ -41,18 +40,16 @@ class TimeEncoding(nn.Module):
 
         self.dim = dim
 
-        self.linear1 = nn.Linear(dim//4, dim, bias=True)
+        self.linear1 = nn.Linear(dim // 4, dim, bias=True)
         self.linear2 = nn.Linear(dim, dim, bias=True)
         self.silu = nn.SiLU()
 
         self.register_buffer(
-            'freqs',
+            "freqs",
             torch.pow(
                 float(1e4),
-                -torch.arange(
-                    start = 0, end = dim // 8, dtype = torch.float32
-                ) / (dim // 8)
-            )
+                -torch.arange(start=0, end=dim // 8, dtype=torch.float32) / (dim // 8),
+            ),
         )
 
     def get_time_encoding(self, t: TensorOrInt) -> torch.Tensor:
@@ -80,13 +77,13 @@ class TimeEncoding(nn.Module):
 
         x = t * self.freqs[None, :]
 
-        return torch.cat([torch.cos(x), torch.sin(x)], dim=-1)        
-        
+        return torch.cat([torch.cos(x), torch.sin(x)], dim=-1)
+
     def forward(self, t: TensorOrInt) -> torch.Tensor:
         """
         forward
 
-        Compute the encoding of timestep(s) and expand it to a 
+        Compute the encoding of timestep(s) and expand it to a
         higher-dimensional space using linear layers.
 
         Args:

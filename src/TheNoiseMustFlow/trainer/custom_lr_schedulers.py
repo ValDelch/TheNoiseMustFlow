@@ -5,7 +5,6 @@ The module implements different learning rate schedulers that can be used during
 the training of deep learning models.
 """
 
-
 from __future__ import annotations
 from typing import Optional
 
@@ -21,8 +20,15 @@ class CosineLRScheduler(lr_scheduler._LRScheduler):
     with a warmup phase.
     """
 
-    def __init__(self, optimizer: Optimizer, base_lr: float, total_epochs: int, warmup_epochs: int = 0, 
-                 min_lr: float = 0.0, last_epoch: int = -1):
+    def __init__(
+        self,
+        optimizer: Optimizer,
+        base_lr: float,
+        total_epochs: int,
+        warmup_epochs: int = 0,
+        min_lr: float = 0.0,
+        last_epoch: int = -1,
+    ):
         """
         Initializes the CosineLRScheduler.
 
@@ -51,13 +57,15 @@ class CosineLRScheduler(lr_scheduler._LRScheduler):
             ]
         else:
             # Cosine annealing
-            progress = (self.last_epoch - self.warmup_epochs) / max(1, self.total_epochs - self.warmup_epochs)
+            progress = (self.last_epoch - self.warmup_epochs) / max(
+                1, self.total_epochs - self.warmup_epochs
+            )
             cosine_factor = 0.5 * (1 + math.cos(math.pi * progress))
             return [
                 self.min_lr + cosine_factor * (self.base_lr - self.min_lr)
                 for _ in self.base_lrs
             ]
-        
+
     def step(self, metrics: Optional[float] = None):
         """
         Override step to accept a metrics argument for compatibility with several schedulers.
