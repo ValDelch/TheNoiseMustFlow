@@ -4,7 +4,6 @@ train.py
 This module implements the training loops for the VAE and diffusion model.
 """
 
-
 from __future__ import annotations
 from typing import Optional, Union
 from contextlib import nullcontext
@@ -24,9 +23,14 @@ from TheNoiseMustFlow.core.samplers import DDPMSampler, DDIMSampler
 import matplotlib.pyplot as plt
 
 
-def print_epoch_summary(epoch: int, epochs: int, current_lr: float, 
-                        train_losses: dict[str, float],
-                        test_losses: dict[str, float], best_loss: float) -> None:
+def print_epoch_summary(
+    epoch: int,
+    epochs: int,
+    current_lr: float,
+    train_losses: dict[str, float],
+    test_losses: dict[str, float],
+    best_loss: float,
+) -> None:
     """
     Utility function to print the summary of the training epoch.
     """
@@ -41,7 +45,7 @@ def print_epoch_summary(epoch: int, epochs: int, current_lr: float,
         if len(key) > 20:
             key = key[:20] + "..."
         text = f"{key:<25}: {value:>28}"
-        return format_line(text[:content_width - 1])  # Trim if necessary
+        return format_line(text[: content_width - 1])  # Trim if necessary
 
     print(f"\n╔{line[:-2]}╗")
     print(format_line(f"Epoch {epoch + 1}/{epochs}"))
@@ -59,19 +63,26 @@ def print_epoch_summary(epoch: int, epochs: int, current_lr: float,
     print(format_kv("Best Test Loss", f"{best_loss:.3e}"))
     print(f"╚{line[:-2]}╝\n")
 
-def write_tensorboard_summary(writer: SummaryWriter, epoch: int, current_lr: float,
-                              train_losses: dict[str, float], test_losses: dict[str, float]) -> None:
+
+def write_tensorboard_summary(
+    writer: SummaryWriter,
+    epoch: int,
+    current_lr: float,
+    train_losses: dict[str, float],
+    test_losses: dict[str, float],
+) -> None:
     """
     Utility function to write the training and testing losses to TensorBoard.
     """
-    writer.add_scalar('Train', sum(train_losses.values()), epoch)
-    writer.add_scalar('Test', sum(test_losses.values()), epoch)
-    writer.add_scalar('Learning Rate', current_lr, epoch)
+    writer.add_scalar("Train", sum(train_losses.values()), epoch)
+    writer.add_scalar("Test", sum(test_losses.values()), epoch)
+    writer.add_scalar("Learning Rate", current_lr, epoch)
 
     for k, v in train_losses.items():
-        writer.add_scalar(f'Train/{k}', v, epoch)
+        writer.add_scalar(f"Train/{k}", v, epoch)
     for k, v in test_losses.items():
-        writer.add_scalar(f'Test/{k}', v, epoch)
+        writer.add_scalar(f"Test/{k}", v, epoch)
+
 
 def compute_loss(loss_fn_inputs: dict, losses: list[dict]) -> dict:
     """
@@ -88,73 +99,87 @@ def compute_loss(loss_fn_inputs: dict, losses: list[dict]) -> dict:
     """
     _loss = {}
     for loss in losses:
-        if loss['loss_name'] in ['mse_loss', 'huber_noise_loss']:
-            assert 'x' in loss_fn_inputs and 'x_hat' in loss_fn_inputs, \
+        if loss["loss_name"] in ["mse_loss", "huber_noise_loss"]:
+            assert "x" in loss_fn_inputs and "x_hat" in loss_fn_inputs, (
                 f"Inputs for {loss['loss_name']} must contain 'x' and 'x_hat'."
-            
-            loss_value = loss['callable'](
-                loss_fn_inputs['x'],
-                loss_fn_inputs['x_hat'],
-                **loss['kwargs']
             )
-            _loss[loss['loss_name']] = loss_value * loss['weight']
 
-        elif loss['loss_name'] == 'snr_weighted_mse_loss':
-            assert 'x' in loss_fn_inputs and 'x_hat' in loss_fn_inputs and 'snr' in loss_fn_inputs, \
-                f"Inputs for {loss['loss_name']} must contain 'x', 'x_hat', and 'snr'."
-            
-            loss_value = loss['callable'](
-                loss_fn_inputs['x'],
-                loss_fn_inputs['x_hat'],
-                snr=loss_fn_inputs['snr'],
-                **loss['kwargs']
+            loss_value = loss["callable"](
+                loss_fn_inputs["x"], loss_fn_inputs["x_hat"], **loss["kwargs"]
             )
-            _loss[loss['loss_name']] = loss_value * loss['weight']
+            _loss[loss["loss_name"]] = loss_value * loss["weight"]
 
-        elif loss['loss_name'] == 'kl_divergence':
-            assert 'stats' in loss_fn_inputs, \
+        elif loss["loss_name"] == "snr_weighted_mse_loss":
+            assert (
+                "x" in loss_fn_inputs
+                and "x_hat" in loss_fn_inputs
+                and "snr" in loss_fn_inputs
+            ), f"Inputs for {loss['loss_name']} must contain 'x', 'x_hat', and 'snr'."
+
+            loss_value = loss["callable"](
+                loss_fn_inputs["x"],
+                loss_fn_inputs["x_hat"],
+                snr=loss_fn_inputs["snr"],
+                **loss["kwargs"],
+            )
+            _loss[loss["loss_name"]] = loss_value * loss["weight"]
+
+        elif loss["loss_name"] == "kl_divergence":
+            assert "stats" in loss_fn_inputs, (
                 f"Inputs for {loss['loss_name']} must contain 'stats'."
-            
-            loss_value = loss['callable'](
-                *loss_fn_inputs['stats'],
-                **loss['kwargs']
             )
-            _loss[loss['loss_name']] = loss_value * loss['weight']
 
-        elif loss['loss_name'] == 'VAE_loss':
-            assert 'x' in loss_fn_inputs and 'x_hat' in loss_fn_inputs and 'stats' in loss_fn_inputs, \
-                f"Inputs for {loss['loss_name']} must contain 'x', 'x_hat', and 'stats'."
-            
-            loss_value = loss['callable'](
-                loss_fn_inputs['x'],
-                loss_fn_inputs['x_hat'],
-                *loss_fn_inputs['stats'],
-                **loss['kwargs']
+            loss_value = loss["callable"](*loss_fn_inputs["stats"], **loss["kwargs"])
+            _loss[loss["loss_name"]] = loss_value * loss["weight"]
+
+        elif loss["loss_name"] == "VAE_loss":
+            assert (
+                "x" in loss_fn_inputs
+                and "x_hat" in loss_fn_inputs
+                and "stats" in loss_fn_inputs
+            ), f"Inputs for {loss['loss_name']} must contain 'x', 'x_hat', and 'stats'."
+
+            loss_value = loss["callable"](
+                loss_fn_inputs["x"],
+                loss_fn_inputs["x_hat"],
+                *loss_fn_inputs["stats"],
+                **loss["kwargs"],
             )
-            _loss[loss['loss_name']] = loss_value * loss['weight']
+            _loss[loss["loss_name"]] = loss_value * loss["weight"]
 
-        elif loss['loss_name'] == 'cross_entropy_loss':
-            assert 'logits' in loss_fn_inputs and 'targets' in loss_fn_inputs, \
+        elif loss["loss_name"] == "cross_entropy_loss":
+            assert "logits" in loss_fn_inputs and "targets" in loss_fn_inputs, (
                 f"Inputs for {loss['loss_name']} must contain 'logits' and 'targets'."
-            
-            loss_value = loss['callable'](
-                loss_fn_inputs['logits'],
-                loss_fn_inputs['targets'],
-                **loss['kwargs']
             )
-            _loss[loss['loss_name']] = loss_value * loss['weight']
+
+            loss_value = loss["callable"](
+                loss_fn_inputs["logits"], loss_fn_inputs["targets"], **loss["kwargs"]
+            )
+            _loss[loss["loss_name"]] = loss_value * loss["weight"]
 
         else:
             raise ValueError(f"Unknown loss function: {loss['loss_name']}")
-        
+
     return _loss
 
-def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
-              test_dataloader: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer,
-              losses: list[dict], epochs: int,  scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
-              checkpoint_folder: str = "./checkpoints", use_tqdm: bool = False, use_tensorboard: bool = False, 
-              validation: bool = True, seed: Optional[int] = None, mixed_precision: bool = False,
-              device: str = "cuda" if torch.cuda.is_available() else "cpu", return_model: bool = False) -> Optional[VAE]:
+
+def train_vae(
+    vae: VAE,
+    train_dataloader: torch.utils.data.DataLoader,
+    test_dataloader: torch.utils.data.DataLoader,
+    optimizer: torch.optim.Optimizer,
+    losses: list[dict],
+    epochs: int,
+    scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+    checkpoint_folder: str = "./checkpoints",
+    use_tqdm: bool = False,
+    use_tensorboard: bool = False,
+    validation: bool = True,
+    seed: Optional[int] = None,
+    mixed_precision: bool = False,
+    device: str = "cuda" if torch.cuda.is_available() else "cpu",
+    return_model: bool = False,
+) -> Optional[VAE]:
     """
     Train the VAE model.
 
@@ -179,25 +204,29 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
         device: Device to use for training (e.g., 'cuda' or 'cpu').
         return_model: Whether to return the trained VAE model.
     """
-    if not os.path.exists(os.path.join(checkpoint_folder, 'VAE')):
-        os.makedirs(os.path.join(checkpoint_folder, 'VAE'))
+    if not os.path.exists(os.path.join(checkpoint_folder, "VAE")):
+        os.makedirs(os.path.join(checkpoint_folder, "VAE"))
 
     # Check for existing checkpoints
     if os.path.exists(os.path.join(checkpoint_folder, "VAE", "vae.pth")):
-        checkpoint = torch.load(os.path.join(checkpoint_folder, "VAE", "vae.pth"), map_location=device)
-        vae.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        if scheduler and checkpoint['scheduler_state_dict']:
-            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        checkpoint = torch.load(
+            os.path.join(checkpoint_folder, "VAE", "vae.pth"), map_location=device
+        )
+        vae.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        if scheduler and checkpoint["scheduler_state_dict"]:
+            scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-        best_loss = checkpoint.get('best_loss', float('inf'))
-        seed = checkpoint.get('seed', None)
-        start_epoch = checkpoint.get('epoch', 0) + 1
+        best_loss = checkpoint.get("best_loss", float("inf"))
+        seed = checkpoint.get("seed", None)
+        start_epoch = checkpoint.get("epoch", 0) + 1
 
-        print(f"[INFO] Resumed VAE training from epoch {start_epoch} with best loss {best_loss:.4f}.\n")
+        print(
+            f"[INFO] Resumed VAE training from epoch {start_epoch} with best loss {best_loss:.4f}.\n"
+        )
     else:
         start_epoch = 0
-        best_loss = float('inf')
+        best_loss = float("inf")
         print("[INFO] Starting VAE training from scratch.\n")
 
     if start_epoch >= epochs:
@@ -214,33 +243,35 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
     if seed is not None:
         generator.manual_seed(seed)
 
-    scaler = GradScaler() if (device.startswith('cuda') and mixed_precision) else None
+    scaler = GradScaler() if (device.startswith("cuda") and mixed_precision) else None
     for epoch in range(start_epoch, epochs):
-        
         #
         # Training loop
         #
 
         vae.train()
 
-        train_losses = {loss_fn['loss_name']: 0.0 for loss_fn in losses}
+        train_losses = {loss_fn["loss_name"]: 0.0 for loss_fn in losses}
 
-        pbar = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{epochs}", unit="batch", disable=not use_tqdm)
+        pbar = tqdm(
+            train_dataloader,
+            desc=f"Epoch {epoch + 1}/{epochs}",
+            unit="batch",
+            disable=not use_tqdm,
+        )
         for batch in pbar:
             optimizer.zero_grad(set_to_none=True)
 
             with autocast(enabled=(scaler is not None), device_type="cuda"):
                 # Forward pass
-                _loss = step_vae(
-                    vae, batch, losses, generator, device
-                )
+                _loss = step_vae(vae, batch, losses, generator, device)
 
             # Update the training losses
             for k, v in _loss.items():
                 train_losses[k] += v.item() / len(train_dataloader)
 
             total_loss = sum(_loss.values())
-            
+
             # Backward pass and optimization
             if scaler is not None:
                 scaler.scale(total_loss).backward()
@@ -252,31 +283,34 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
 
         #
         # Testing loop
-        # 
+        #
 
         vae.eval()
 
-        test_losses = {loss_fn['loss_name']: 0.0 for loss_fn in losses}
+        test_losses = {loss_fn["loss_name"]: 0.0 for loss_fn in losses}
 
-        pbar = tqdm(test_dataloader, desc=f"Testing {epoch + 1}/{epochs}", unit="batch", disable=not use_tqdm)
+        pbar = tqdm(
+            test_dataloader,
+            desc=f"Testing {epoch + 1}/{epochs}",
+            unit="batch",
+            disable=not use_tqdm,
+        )
         with torch.no_grad():
             for batch in pbar:
                 # Forward pass
-                _loss = step_vae(
-                    vae, batch, losses, generator, device
-                )
+                _loss = step_vae(vae, batch, losses, generator, device)
 
                 # Update the testing losses
                 for k, v in _loss.items():
                     test_losses[k] += v.item() / len(test_dataloader)
-        
+
         # Update the scheduler if it exists
         tot_test_loss = sum(test_losses.values())
         if scheduler:
             current_lr = scheduler.get_last_lr()[0]
             scheduler.step(tot_test_loss)
         else:
-            current_lr = optimizer.param_groups[0]['lr']
+            current_lr = optimizer.param_groups[0]["lr"]
 
         # Summary
         print_epoch_summary(
@@ -289,17 +323,24 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
 
         if tot_test_loss < best_loss:
             best_loss = tot_test_loss
-            torch.save({
-                'model_state_dict': vae.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
-                'best_loss': best_loss,
-                'epoch': epoch,
-                'seed': seed
-            }, os.path.join(checkpoint_folder, "VAE", "vae.pth"))
+            torch.save(
+                {
+                    "model_state_dict": vae.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scheduler_state_dict": scheduler.state_dict()
+                    if scheduler
+                    else None,
+                    "best_loss": best_loss,
+                    "epoch": epoch,
+                    "seed": seed,
+                },
+                os.path.join(checkpoint_folder, "VAE", "vae.pth"),
+            )
             print(f"[INFO] New best loss: {best_loss:.4f}. Model saved.\n")
         else:
-            print(f"[INFO] No improvement in loss. Current best loss: {best_loss:.4f}.\n")
+            print(
+                f"[INFO] No improvement in loss. Current best loss: {best_loss:.4f}.\n"
+            )
 
         #
         # Validation loop
@@ -310,44 +351,46 @@ def train_vae(vae: VAE, train_dataloader: torch.utils.data.DataLoader,
 
         with torch.no_grad():
             batch = next(iter(test_dataloader))
-            images = batch['image'].to(device)
-            noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
+            images = batch["image"].to(device)
+            noise = torch.randn(
+                images.size(0), *vae.latent_shape, device=device, generator=generator
+            )
             _, rec_images = vae(
                 images, noise, return_stats=False, rescale=False, return_rec=True
             )
 
             num_samples = min(32, images.size(0))
-            cmap = 'gray' if images.size(1) == 1 else None
+            cmap = "gray" if images.size(1) == 1 else None
 
             fig, axes = plt.subplots(num_samples, 2, figsize=(10, 5 * num_samples))
             for i in range(num_samples):
                 # Original images
                 axes[i, 0].imshow(
-                    images[i].cpu().numpy().squeeze(),
-                    cmap=cmap, vmin=0, vmax=1
+                    images[i].cpu().numpy().squeeze(), cmap=cmap, vmin=0, vmax=1
                 )
-                axes[i, 0].set_title(f"Original Image {i+1}")
-                axes[i, 0].axis('off')
+                axes[i, 0].set_title(f"Original Image {i + 1}")
+                axes[i, 0].axis("off")
 
                 # Reconstructed images
                 axes[i, 1].imshow(
-                    rec_images[i].cpu().numpy().squeeze(), 
-                    cmap=cmap, vmin=0, vmax=1
+                    rec_images[i].cpu().numpy().squeeze(), cmap=cmap, vmin=0, vmax=1
                 )
-                axes[i, 1].set_title(f"Reconstructed Image {i+1}")
-                axes[i, 1].axis('off')
+                axes[i, 1].set_title(f"Reconstructed Image {i + 1}")
+                axes[i, 1].axis("off")
 
             plt.tight_layout()
 
         if use_tensorboard:
-            writer.add_figure('VAE Reconstruction', fig, global_step=epoch)
+            writer.add_figure("VAE Reconstruction", fig, global_step=epoch)
             plt.close(fig)
 
     if return_model:
         return vae
-    
-def step_vae(vae: VAE, batch: dict, losses: list[dict], 
-             generator: torch.Generator, device: str) -> dict[str, torch.Tensor]:
+
+
+def step_vae(
+    vae: VAE, batch: dict, losses: list[dict], generator: torch.Generator, device: str
+) -> dict[str, torch.Tensor]:
     """
     Perform a single step for the VAE model.
 
@@ -362,32 +405,44 @@ def step_vae(vae: VAE, batch: dict, losses: list[dict],
             - 'kwargs': Additional keyword arguments for the loss function.
         generator: Random number generator for reproducibility.
         device: Device to use for training (e.g., 'cuda' or 'cpu').
-    
+
     Returns:
         A dictionary containing the computed losses for the batch.
     """
-    images = batch['image'].to(device)
+    images = batch["image"].to(device)
 
     # Forward pass
-    noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
+    noise = torch.randn(
+        images.size(0), *vae.latent_shape, device=device, generator=generator
+    )
     _, stats, rec_images = vae(
         images, noise, return_stats=True, rescale=False, return_rec=True
     )
 
     # Loss computations
-    loss_fn_inputs = {
-        'x': images,
-        'x_hat': rec_images,
-        'stats': stats
-    }
+    loss_fn_inputs = {"x": images, "x_hat": rec_images, "stats": stats}
     return compute_loss(loss_fn_inputs, losses)
 
-def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train_dataloader: torch.utils.data.DataLoader, 
-                    test_dataloader: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer, losses: list[dict], 
-                    epochs: int, vae: Optional[VAE] = None, scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
-                    checkpoint_folder: str = "./checkpoints", use_tqdm: bool = False, use_tensorboard: bool = False, 
-                    validation: bool = True, seed: Optional[int] = None, mixed_precision: bool = False,
-                    device: str = "cuda" if torch.cuda.is_available() else "cpu", return_model: bool = False) -> Optional[Diffusion]:
+
+def train_diffusion(
+    diffusion: Diffusion,
+    noise_scheduler: NoiseScheduler,
+    train_dataloader: torch.utils.data.DataLoader,
+    test_dataloader: torch.utils.data.DataLoader,
+    optimizer: torch.optim.Optimizer,
+    losses: list[dict],
+    epochs: int,
+    vae: Optional[VAE] = None,
+    scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
+    checkpoint_folder: str = "./checkpoints",
+    use_tqdm: bool = False,
+    use_tensorboard: bool = False,
+    validation: bool = True,
+    seed: Optional[int] = None,
+    mixed_precision: bool = False,
+    device: str = "cuda" if torch.cuda.is_available() else "cpu",
+    return_model: bool = False,
+) -> Optional[Diffusion]:
     """
     Train the diffusion model.
 
@@ -420,21 +475,26 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
 
     # Check for existing checkpoints
     if os.path.exists(os.path.join(checkpoint_folder, "diffusion", "diffusion.pth")):
-        checkpoint = torch.load(os.path.join(checkpoint_folder, "diffusion", "diffusion.pth"), map_location=device)
-        diffusion.load_state_dict(checkpoint['model_state_dict'])
-        noise_scheduler.load_state_dict(checkpoint['noise_scheduler_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        if scheduler and checkpoint['scheduler_state_dict']:
-            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        checkpoint = torch.load(
+            os.path.join(checkpoint_folder, "diffusion", "diffusion.pth"),
+            map_location=device,
+        )
+        diffusion.load_state_dict(checkpoint["model_state_dict"])
+        noise_scheduler.load_state_dict(checkpoint["noise_scheduler_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        if scheduler and checkpoint["scheduler_state_dict"]:
+            scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-        best_loss = checkpoint.get('best_loss', float('inf'))
-        seed = checkpoint.get('seed', None)
-        start_epoch = checkpoint.get('epoch', 0) + 1
+        best_loss = checkpoint.get("best_loss", float("inf"))
+        seed = checkpoint.get("seed", None)
+        start_epoch = checkpoint.get("epoch", 0) + 1
 
-        print(f"[INFO] Resumed diffusion training from epoch {start_epoch} with best loss {best_loss:.4f}.\n")
+        print(
+            f"[INFO] Resumed diffusion training from epoch {start_epoch} with best loss {best_loss:.4f}.\n"
+        )
     else:
         start_epoch = 0
-        best_loss = float('inf')
+        best_loss = float("inf")
         print("[INFO] Starting diffusion training from scratch.\n")
 
     if start_epoch >= epochs:
@@ -443,7 +503,7 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
             return diffusion
         else:
             return None
-        
+
     if use_tensorboard:
         writer = SummaryWriter(log_dir=os.path.join(checkpoint_folder, "diffusion"))
 
@@ -451,9 +511,8 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
     if seed is not None:
         generator.manual_seed(seed)
 
-    scaler = GradScaler() if (device.startswith('cuda') and mixed_precision) else None
+    scaler = GradScaler() if (device.startswith("cuda") and mixed_precision) else None
     for epoch in range(start_epoch, epochs):
-
         #
         # Training loop
         #
@@ -461,9 +520,14 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
         diffusion.train()
         vae.eval() if vae is not None else None
 
-        train_losses = {loss_fn['loss_name']: 0.0 for loss_fn in losses}
+        train_losses = {loss_fn["loss_name"]: 0.0 for loss_fn in losses}
 
-        pbar = tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{epochs}", unit="batch", disable=not use_tqdm)
+        pbar = tqdm(
+            train_dataloader,
+            desc=f"Epoch {epoch + 1}/{epochs}",
+            unit="batch",
+            disable=not use_tqdm,
+        )
         for batch in pbar:
             optimizer.zero_grad(set_to_none=True)
 
@@ -495,9 +559,14 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
         diffusion.eval()
         vae.eval() if vae is not None else None
 
-        test_losses = {loss_fn['loss_name']: 0.0 for loss_fn in losses}
+        test_losses = {loss_fn["loss_name"]: 0.0 for loss_fn in losses}
 
-        pbar = tqdm(test_dataloader, desc=f"Testing {epoch + 1}/{epochs}", unit="batch", disable=not use_tqdm)
+        pbar = tqdm(
+            test_dataloader,
+            desc=f"Testing {epoch + 1}/{epochs}",
+            unit="batch",
+            disable=not use_tqdm,
+        )
         with torch.no_grad():
             for batch in pbar:
                 # Forward pass
@@ -515,7 +584,7 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
             current_lr = scheduler.get_last_lr()[0]
             scheduler.step(tot_test_loss)
         else:
-            current_lr = optimizer.param_groups[0]['lr']
+            current_lr = optimizer.param_groups[0]["lr"]
 
         # Summary
         print_epoch_summary(
@@ -528,18 +597,25 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
 
         if tot_test_loss < best_loss:
             best_loss = tot_test_loss
-            torch.save({
-                'model_state_dict': diffusion.state_dict(),
-                'noise_scheduler_state_dict': noise_scheduler.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
-                'best_loss': best_loss,
-                'epoch': epoch,
-                'seed': seed
-            }, os.path.join(checkpoint_folder, "diffusion", "diffusion.pth"))
+            torch.save(
+                {
+                    "model_state_dict": diffusion.state_dict(),
+                    "noise_scheduler_state_dict": noise_scheduler.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "scheduler_state_dict": scheduler.state_dict()
+                    if scheduler
+                    else None,
+                    "best_loss": best_loss,
+                    "epoch": epoch,
+                    "seed": seed,
+                },
+                os.path.join(checkpoint_folder, "diffusion", "diffusion.pth"),
+            )
             print(f"[INFO] New best loss: {best_loss:.4f}. Model saved.\n")
         else:
-            print(f"[INFO] No improvement in loss. Current best loss: {best_loss:.4f}.\n")
+            print(
+                f"[INFO] No improvement in loss. Current best loss: {best_loss:.4f}.\n"
+            )
 
         #
         # Validation loop
@@ -549,41 +625,48 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
             continue
 
         with torch.no_grad():
-
             # Noise prediction
 
             batch = next(iter(test_dataloader))
-            contexts = batch['context'].to(device)
+            contexts = batch["context"].to(device)
             if vae is not None:
-                images = batch['image'].to(device)
-                noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
+                images = batch["image"].to(device)
+                noise = torch.randn(
+                    images.size(0),
+                    *vae.latent_shape,
+                    device=device,
+                    generator=generator,
+                )
                 latent_images = vae(
                     images, noise, return_stats=False, rescale=True, return_rec=False
                 )
             else:
-                latent_images = batch['image'].to(device)
+                latent_images = batch["image"].to(device)
 
             # Sample the time steps and add the noise
             t = torch.randint(
-                0, noise_scheduler.steps, (latent_images.size(0),), 
-                device=device, generator=generator
+                0,
+                noise_scheduler.steps,
+                (latent_images.size(0),),
+                device=device,
+                generator=generator,
             )
             snr = noise_scheduler.compute_snr(t)
 
-            noise = torch.randn(latent_images.size(), device=device, generator=generator)
-            noisy_images = noise_scheduler.add_noise_cumulative(
-                latent_images, t, noise
+            noise = torch.randn(
+                latent_images.size(), device=device, generator=generator
             )
+            noisy_images = noise_scheduler.add_noise_cumulative(latent_images, t, noise)
 
             # Forward pass through the diffusion model
-            pred_noise = diffusion(
-                noisy_images, t, contexts
-            )
+            pred_noise = diffusion(noisy_images, t, contexts)
 
             num_samples = min(32, images.size(0))
-            cmap = 'gray'
+            cmap = "gray"
 
-            noise = noise.mean(dim=1, keepdim=False) # Mean across channels for visualization
+            noise = noise.mean(
+                dim=1, keepdim=False
+            )  # Mean across channels for visualization
             pred_noise = pred_noise.mean(dim=1, keepdim=False)
             vmax = max(noise.max().item(), pred_noise.max().item())
             vmin = min(noise.min().item(), pred_noise.min().item())
@@ -592,25 +675,34 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
             for i in range(num_samples):
                 # Original images
                 axes[i, 0].imshow(
-                    noise[i].cpu().numpy().squeeze(),
-                    cmap=cmap, vmin=vmin, vmax=vmax
+                    noise[i].cpu().numpy().squeeze(), cmap=cmap, vmin=vmin, vmax=vmax
                 )
-                axes[i, 0].set_title(f"Real Noise {i+1}")
-                axes[i, 0].text(0., 0., f'{str(t[i].cpu().item())}: {snr[i]}' , color='red', fontsize=14, ha='left', va='top')
-                axes[i, 0].axis('off')
+                axes[i, 0].set_title(f"Real Noise {i + 1}")
+                axes[i, 0].text(
+                    0.0,
+                    0.0,
+                    f"{str(t[i].cpu().item())}: {snr[i]}",
+                    color="red",
+                    fontsize=14,
+                    ha="left",
+                    va="top",
+                )
+                axes[i, 0].axis("off")
 
                 # Reconstructed images
                 axes[i, 1].imshow(
-                    pred_noise[i].cpu().numpy().squeeze(), 
-                    cmap=cmap, vmin=vmin, vmax=vmax
+                    pred_noise[i].cpu().numpy().squeeze(),
+                    cmap=cmap,
+                    vmin=vmin,
+                    vmax=vmax,
                 )
-                axes[i, 1].set_title(f"Predicted Noise {i+1}")
-                axes[i, 1].axis('off')
+                axes[i, 1].set_title(f"Predicted Noise {i + 1}")
+                axes[i, 1].axis("off")
 
             plt.tight_layout()
 
             if use_tensorboard:
-                writer.add_figure('Diffusion Predicted Noise', fig, global_step=epoch)
+                writer.add_figure("Diffusion Predicted Noise", fig, global_step=epoch)
                 plt.close(fig)
 
             # Sampling with DDPM
@@ -619,21 +711,23 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
                 continue
 
             if images.size(1) == 1:
-                cmap = 'gray'
+                cmap = "gray"
             elif images.size(1) == 3:
                 cmap = None
             else:
                 continue
 
-            sampler = DDPMSampler(noise_scheduler=noise_scheduler, use_tqdm=False).to(device)
+            sampler = DDPMSampler(noise_scheduler=noise_scheduler, use_tqdm=False).to(
+                device
+            )
             x = torch.randn((1, *vae.latent_shape), device=device)
 
             sampled_latent = sampler.sample(
                 x,
                 pred_noise_func=diffusion,
-                func_inputs={'context': contexts[i, None]},
+                func_inputs={"context": contexts[i, None]},
                 return_intermediates=True,
-                return_step=noise_scheduler.steps // 100
+                return_step=noise_scheduler.steps // 100,
             )
             generated_images = vae.decoder(
                 torch.cat(sampled_latent, dim=0), rescale=True
@@ -644,13 +738,13 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
                 axes[i].imshow(
                     generated_images[i].cpu().numpy().transpose(1, 2, 0), cmap=cmap
                 )
-                axes[i].set_title(f"DDPM Generated Image {i+1}")
-                axes[i].axis('off')
-        
+                axes[i].set_title(f"DDPM Generated Image {i + 1}")
+                axes[i].axis("off")
+
             plt.tight_layout()
 
             if use_tensorboard:
-                writer.add_figure('DDPM Generated Images', fig, global_step=epoch)
+                writer.add_figure("DDPM Generated Images", fig, global_step=epoch)
                 plt.close(fig)
 
             # Sampling with DDIM
@@ -663,9 +757,9 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
             sampled_latent = sampler.sample(
                 x,
                 pred_noise_func=diffusion,
-                func_inputs={'context': contexts[i, None]},
+                func_inputs={"context": contexts[i, None]},
                 return_intermediates=True,
-                return_step=sampler.steps // 10
+                return_step=sampler.steps // 10,
             )
             generated_images = vae.decoder(
                 torch.cat(sampled_latent, dim=0), rescale=True
@@ -676,21 +770,29 @@ def train_diffusion(diffusion: Diffusion, noise_scheduler: NoiseScheduler, train
                 axes[i].imshow(
                     generated_images[i].cpu().numpy().transpose(1, 2, 0), cmap=cmap
                 )
-                axes[i].set_title(f"DDIM Generated Image {i+1}")
-                axes[i].axis('off')
+                axes[i].set_title(f"DDIM Generated Image {i + 1}")
+                axes[i].axis("off")
 
             plt.tight_layout()
 
             if use_tensorboard:
-                writer.add_figure('DDIM Generated Images', fig, global_step=epoch)
+                writer.add_figure("DDIM Generated Images", fig, global_step=epoch)
                 plt.close(fig)
 
     if return_model:
         return diffusion
-    
-def step_diffusion(diffusion: Diffusion, batch: dict, noise_scheduler: NoiseScheduler, losses: list[dict], 
-                   generator: torch.Generator, device: str, vae: Optional[VAE] = None,
-                   sampler: Optional[Union[DDPMSampler, DDIMSampler]] = None) -> Union[dict[str, torch.Tensor], tuple[dict[str, torch.Tensor], torch.Tensor]]:
+
+
+def step_diffusion(
+    diffusion: Diffusion,
+    batch: dict,
+    noise_scheduler: NoiseScheduler,
+    losses: list[dict],
+    generator: torch.Generator,
+    device: str,
+    vae: Optional[VAE] = None,
+    sampler: Optional[Union[DDPMSampler, DDIMSampler]] = None,
+) -> Union[dict[str, torch.Tensor], tuple[dict[str, torch.Tensor], torch.Tensor]]:
     """
     Perform a single step for the diffusion model.
 
@@ -709,54 +811,54 @@ def step_diffusion(diffusion: Diffusion, batch: dict, noise_scheduler: NoiseSche
         vae: The VAE model used for encoding and decoding images.
             If None, dataloaders are expected to return latent vectors directly.
         sampler: Optional sampler for re-generating images from predicted noise.
-    
+
     Returns:
         A dictionary containing the computed losses for the batch.
     """
-    contexts = batch['context'].to(device)
+    contexts = batch["context"].to(device)
     if vae is not None:
-        images = batch['image'].to(device)
-        noise = torch.randn(images.size(0), *vae.latent_shape, device=device, generator=generator)
+        images = batch["image"].to(device)
+        noise = torch.randn(
+            images.size(0), *vae.latent_shape, device=device, generator=generator
+        )
         with torch.no_grad():
             latent_images = vae(
                 images, noise, return_stats=False, rescale=True, return_rec=False
             )
     else:
-        latent_images = batch['image'].to(device)
+        latent_images = batch["image"].to(device)
 
     # Sample the time steps and add the noise
     t = torch.randint(
-        0, noise_scheduler.steps, (latent_images.size(0),), 
-        device=device, generator=generator
+        0,
+        noise_scheduler.steps,
+        (latent_images.size(0),),
+        device=device,
+        generator=generator,
     )
     snr = noise_scheduler.compute_snr(t)
 
     noise = torch.randn(latent_images.size(), device=device, generator=generator)
-    noisy_images = noise_scheduler.add_noise_cumulative(
-        latent_images, t, noise
-    )
+    noisy_images = noise_scheduler.add_noise_cumulative(latent_images, t, noise)
 
     # Forward pass through the diffusion model
-    pred_noise = diffusion(
-        noisy_images, t, contexts
-    )
+    pred_noise = diffusion(noisy_images, t, contexts)
 
     # Loss computations
-    loss_fn_inputs = {
-        'x': noise,
-        'x_hat': pred_noise,
-        'snr': snr
-    }
+    loss_fn_inputs = {"x": noise, "x_hat": pred_noise, "snr": snr}
 
     # If sampler is provided, we will also compute the reconstructed images
     if sampler is not None:
         denoised_latent = torch.empty_like(noisy_images)
         for i, step in enumerate(t):
             denoised_latent[i] = sampler.sample_prev_step(
-                noisy_images[i], int(step), pred_noise[i]
+                noisy_images[i],
+                min(
+                    sampler.steps - 1,
+                    int((step // noise_scheduler.steps) * sampler.steps),
+                ),
+                pred_noise[i],
             )
-        rec_images = vae.decoder(
-            denoised_latent, rescale=True
-        )
+        rec_images = vae.decoder(denoised_latent, rescale=True)
         return compute_loss(loss_fn_inputs, losses), rec_images
     return compute_loss(loss_fn_inputs, losses)
