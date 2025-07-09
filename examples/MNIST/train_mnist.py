@@ -82,6 +82,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed", type=int, default=None, help="Random seed for reproducibility"
     )
+    parser.add_argument(
+        "--mixed_precision",
+        action="store_true",
+        help="Use mixed precision training if available (requires CUDA)",
+    )
 
     # Data loader parameters
     parser.add_argument("--batch_size", type=int, default=256, help="Batch size")
@@ -132,9 +137,9 @@ if __name__ == "__main__":
 
     # Optimizer parameters for diffusion model
     parser.add_argument(
-        "--finetune_VAE",
+        "--finetune_decoder",
         action="store_true",
-        help="Flag to indicate whether to fine-tune the VAE during diffusion training",
+        help="Flag to indicate whether to fine-tune the VAE-decoder during diffusion training",
     )
     parser.add_argument(
         "--diffusion_epochs",
@@ -162,12 +167,6 @@ if __name__ == "__main__":
         help="Number of warmup steps for the diffusion model scheduler",
     )
 
-    parser.add_argument(
-        "--mixed_precision",
-        action="store_true",
-        help="Use mixed precision training if available (requires CUDA)",
-    )
-
     args = parser.parse_args()
 
     if args.checkpoint_folder is None:
@@ -184,7 +183,7 @@ if __name__ == "__main__":
 
     # 1. Load the MNIST dataset and create a data loader
     dataset = MNIST(
-        root="./data", train=True, download=True, unconditional=True, d_context=128
+        root="./data", train=True, download=True, unconditional=False, d_context=16
     )
     train_dataloader = DataLoader(
         dataset,
@@ -194,8 +193,11 @@ if __name__ == "__main__":
         drop_last=True,
         pin_memory=True,
     )
+    dataset = MNIST(
+        root="./data", train=False, download=True, unconditional=False, d_context=16
+    )
     test_dataloader = DataLoader(
-        MNIST(root="./data", train=False, download=True),
+        dataset,
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.num_workers,
@@ -281,9 +283,9 @@ if __name__ == "__main__":
         steps=args.steps, betas=args.betas, schedule=args.schedule, seed=args.seed
     ).to(args.device)
 
-    if args.finetune_VAE:
+    if args.finetune_decoder:
         sampler = DDIMSampler(
-            noise_scheduler=noise_scheduler, steps=50, eta=0.0, use_tqdm=False
+            noise_scheduler=noise_scheduler, steps=50, eta=0.1, use_tqdm=False
         ).to(args.device)
     else:
         sampler = None
@@ -308,7 +310,7 @@ if __name__ == "__main__":
     else:
         optimizer = torch.optim.Adam(
             list(diffusion.parameters())
-            + list(vae.decoder.parameters() if args.finetune_VAE else []),
+            + list(vae.decoder.parameters() if args.finetune_decoder else []),
             lr=args.diffusion_lr,
         )
 
@@ -332,7 +334,7 @@ if __name__ == "__main__":
             {
                 "loss_name": "mse_loss",
                 "callable": mse_loss,
-                "weight": 1e3,
+                "weight": 1e2,
                 "kwargs": {"reduction": "mean"},
             }
         ]
@@ -345,6 +347,8 @@ if __name__ == "__main__":
             optimizer,
             losses,
             epochs=args.diffusion_epochs,
+            rescale=False,
+            scaling_factor=1.0,
             vae=vae,
             sampler=sampler,
             sampler_losses=sampler_losses,

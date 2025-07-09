@@ -431,6 +431,8 @@ def train_diffusion(
     optimizer: torch.optim.Optimizer,
     losses: list[dict],
     epochs: int,
+    rescale: bool = True,
+    scaling_factor: float = 0.18215,
     vae: Optional[VAE] = None,
     sampler: Optional[Union[DDPMSampler, DDIMSampler]] = None,
     sampler_losses: Optional[list[dict]] = None,
@@ -459,6 +461,8 @@ def train_diffusion(
             - 'weight': Weight to apply to the loss
             - 'kwargs': Additional keyword arguments for the loss function.
         epochs: Number of training epochs.
+        rescale: Whether to rescale the i/o of the VAE.
+        scaling_factor: Scaling factor for the latent and noise distributions.
         vae: The VAE model used for encoding and decoding images.
             If None, dataloaders are expected to return latent vectors directly.
         sampler: Optional sampler for training on the whole reconstructed image.
@@ -492,6 +496,14 @@ def train_diffusion(
         best_loss = checkpoint.get("best_loss", float("inf"))
         seed = checkpoint.get("seed", None)
         start_epoch = checkpoint.get("epoch", 0) + 1
+
+        if vae is not None:
+            checkpoint_vae = torch.load(
+                os.path.join(checkpoint_folder, "diffusion", "finetuned_vae.pth"),
+                map_location=device,
+            )
+            if os.path.exists(checkpoint_vae):
+                vae.load_state_dict(checkpoint_vae["model_state_dict"])
 
         print(
             f"[INFO] Resumed diffusion training from epoch {start_epoch} with best loss {best_loss:.4f}.\n"
@@ -544,11 +556,21 @@ def train_diffusion(
             with autocast(enabled=(scaler is not None), device_type="cuda"):
                 # Forward pass
                 _loss = step_diffusion(
-                    diffusion, batch, noise_scheduler, losses, generator, device, vae
+                    diffusion,
+                    rescale,
+                    scaling_factor,
+                    batch,
+                    noise_scheduler,
+                    losses,
+                    generator,
+                    device,
+                    vae,
                 )
                 if sampler is not None:
                     _sampler_loss = rec_diffusion(
                         diffusion,
+                        rescale,
+                        scaling_factor,
                         batch,
                         sampler,
                         sampler_losses,
@@ -596,11 +618,21 @@ def train_diffusion(
             for batch in pbar:
                 # Forward pass
                 _loss = step_diffusion(
-                    diffusion, batch, noise_scheduler, losses, generator, device, vae
+                    diffusion,
+                    rescale,
+                    scaling_factor,
+                    batch,
+                    noise_scheduler,
+                    losses,
+                    generator,
+                    device,
+                    vae,
                 )
                 if sampler is not None:
                     _sampler_loss = rec_diffusion(
                         diffusion,
+                        rescale,
+                        scaling_factor,
                         batch,
                         sampler,
                         sampler_losses,
@@ -681,10 +713,12 @@ def train_diffusion(
                     generator=generator,
                 )
                 latent_images = vae(
-                    images, noise, return_stats=False, rescale=True, return_rec=False
+                    images, noise, return_stats=False, rescale=rescale, return_rec=False
                 )
             else:
                 latent_images = batch["image"].to(device)
+
+            encoded_latent_std = latent_images.std().item()
 
             # Sample the time steps and add the noise
             t = torch.randint(
@@ -696,13 +730,16 @@ def train_diffusion(
             )
             snr = noise_scheduler.compute_snr(t)
 
-            noise = torch.randn(
-                latent_images.size(), device=device, generator=generator
+            noise = (
+                torch.randn(latent_images.size(), device=device, generator=generator)
+                * scaling_factor
             )
             noisy_images = noise_scheduler.add_noise_cumulative(latent_images, t, noise)
+            noisy_latent_std = noisy_images.std().item()
 
             # Forward pass through the diffusion model
             pred_noise = diffusion(noisy_images, t, contexts)
+            pred_noise_std = pred_noise.std().item()
 
             num_samples = min(32, images.size(0))
             cmap = "gray"
@@ -748,6 +785,23 @@ def train_diffusion(
                 writer.add_figure("Diffusion Predicted Noise", fig, global_step=epoch)
                 plt.close(fig)
 
+                # Add info about stds
+                writer.add_scalar(
+                    "Diffusion Std/Encoded Latent Std",
+                    encoded_latent_std,
+                    global_step=epoch,
+                )
+                writer.add_scalar(
+                    "Diffusion Std/Noisy Latent Std",
+                    noisy_latent_std,
+                    global_step=epoch,
+                )
+                writer.add_scalar(
+                    "Diffusion Std/Predicted Noise Std",
+                    pred_noise_std,
+                    global_step=epoch,
+                )
+
             # Sampling with DDPM
 
             if vae is None:
@@ -763,17 +817,18 @@ def train_diffusion(
             sampler = DDPMSampler(noise_scheduler=noise_scheduler, use_tqdm=False).to(
                 device
             )
-            x = torch.randn((1, *vae.latent_shape), device=device)
+            x = torch.randn((1, *vae.latent_shape), device=device) * scaling_factor
 
             sampled_latent = sampler.sample(
                 x,
                 pred_noise_func=diffusion,
-                func_inputs={"context": contexts[i, None]},
+                func_inputs={"context": contexts[0, None]},
                 return_intermediates=True,
                 return_step=noise_scheduler.steps // 100,
             )
+            DDPM_latent_std = sampled_latent[-1].std().item()
             generated_images = vae.decoder(
-                torch.cat(sampled_latent, dim=0), rescale=True
+                torch.cat(sampled_latent, dim=0), rescale=rescale
             )
 
             fig, axes = plt.subplots(1, 10, figsize=(10 * 5, 5))
@@ -795,17 +850,18 @@ def train_diffusion(
             sampler = DDIMSampler(
                 noise_scheduler=noise_scheduler, steps=50, eta=0.05, use_tqdm=False
             ).to(device)
-            x = torch.randn((1, *vae.latent_shape), device=device)
+            x = torch.randn((1, *vae.latent_shape), device=device) * scaling_factor
 
             sampled_latent = sampler.sample(
                 x,
                 pred_noise_func=diffusion,
-                func_inputs={"context": contexts[i, None]},
+                func_inputs={"context": contexts[0, None]},
                 return_intermediates=True,
                 return_step=sampler.steps // 10,
             )
+            DDIM_latent_std = sampled_latent[-1].std().item()
             generated_images = vae.decoder(
-                torch.cat(sampled_latent, dim=0), rescale=True
+                torch.cat(sampled_latent, dim=0), rescale=rescale
             )
 
             fig, axes = plt.subplots(1, 10, figsize=(10 * 5, 5))
@@ -822,6 +878,13 @@ def train_diffusion(
                 writer.add_figure("DDIM Generated Images", fig, global_step=epoch)
                 plt.close(fig)
 
+                writer.add_scalar(
+                    "Diffusion Std/DDPM Latent Std", DDPM_latent_std, global_step=epoch
+                )
+                writer.add_scalar(
+                    "Diffusion Std/DDIM Latent Std", DDIM_latent_std, global_step=epoch
+                )
+
     if return_model:
         if sampler is not None and vae is not None:
             return (diffusion, vae)
@@ -830,6 +893,8 @@ def train_diffusion(
 
 def step_diffusion(
     diffusion: Diffusion,
+    rescale: bool,
+    scaling_factor: float,
     batch: dict,
     noise_scheduler: NoiseScheduler,
     losses: list[dict],
@@ -842,6 +907,8 @@ def step_diffusion(
 
     Args:
         diffusion: The diffusion model to train.
+        rescale: Whether to rescale the i/o of the VAE.
+        scaling_factor: Scaling factor for the latent and noise distributions.
         batch: A dictionary containing the batch data.
             Expected keys are 'image' for the input images and 'context' for additional context.
         noise_scheduler: The noise scheduler for the diffusion model.
@@ -866,7 +933,7 @@ def step_diffusion(
         )
         with torch.no_grad():
             latent_images = vae(
-                images, noise, return_stats=False, rescale=True, return_rec=False
+                images, noise, return_stats=False, rescale=rescale, return_rec=False
             )
     else:
         latent_images = batch["image"].to(device)
@@ -881,7 +948,11 @@ def step_diffusion(
     )
     snr = noise_scheduler.compute_snr(t)
 
-    noise = torch.randn(latent_images.size(), device=device, generator=generator)
+    noise = (
+        torch.randn(latent_images.size(), device=device, generator=generator)
+        * scaling_factor
+    )
+
     noisy_images = noise_scheduler.add_noise_cumulative(latent_images, t, noise)
 
     # Forward pass through the diffusion model
@@ -895,6 +966,8 @@ def step_diffusion(
 
 def rec_diffusion(
     diffusion: Diffusion,
+    rescale: bool,
+    scaling_factor: float,
     batch: dict,
     sampler: Union[DDPMSampler, DDIMSampler],
     sampler_losses: Optional[list[dict]],
@@ -909,8 +982,11 @@ def rec_diffusion(
 
     Args:
         diffusion: The diffusion model to use for reconstruction.
+        rescale: Whether to rescale the i/o of the VAE.
+        scaling_factor: Scaling factor for the latent and noise distributions.
         batch: A dictionary containing the batch data.
             Expected keys are 'context' for additional context.
+        training_steps: Number of training steps for the diffusion process.
         sampler: Sampler to use for the diffusion process.
         sampler_losses: List of dictionaries for the sampler losses.
         generator: Random number generator for reproducibility.
@@ -929,23 +1005,44 @@ def rec_diffusion(
         )
         with torch.no_grad():
             latent_images = vae(
-                images, noise, return_stats=False, rescale=True, return_rec=False
+                images, noise, return_stats=False, rescale=rescale, return_rec=False
             )
     else:
         latent_images = batch["image"].to(device)
 
     # Sample the initial noise
-    x = torch.randn(latent_images.size(), device=device, generator=generator)
-    rec_latent_images = sampler.sample(
+    x = (
+        torch.randn(latent_images.size(), device=device, generator=generator)
+        * scaling_factor
+    )
+
+    # t = (
+    #    int(sampler.steps_list[sampler.steps * 2 // 3])
+    #    if isinstance(sampler, DDIMSampler)
+    #    else sampler.noise_scheduler.steps - 1
+    # )
+    t = torch.randint(
+        0,
+        sampler.noise_scheduler.steps,
+        (latent_images.size(0),),
+        device=device,
+        dtype=torch.long,
+        generator=generator,
+    )
+    noise = diffusion(
         x,
-        pred_noise_func=diffusion,
-        func_inputs={"context": context},
-        return_intermediates=False,
-        training=True,
+        t,
+        context,
+    )
+    # Estimate x_0 from x_t
+    alpha_cumprod_t = sampler.noise_scheduler.alphas_cumprod[t]
+    alpha_cumprod_t = alpha_cumprod_t.view(-1, *((1,) * (x.ndim - 1)))
+    rec_latent_images = (x - torch.sqrt(1.0 - alpha_cumprod_t) * noise) / torch.sqrt(
+        alpha_cumprod_t
     )
 
     if vae is not None:
-        rec_images = vae.decoder(rec_latent_images, rescale=True)
+        rec_images = vae.decoder(rec_latent_images, rescale=rescale)
         loss_fn_inputs = {
             "x": images,
             "x_hat": rec_images,

@@ -54,7 +54,7 @@ class DDPMSampler(torch.nn.Module):
         assert isinstance(noise_scheduler, NoiseScheduler), (
             "noise_scheduler must be an instance of NoiseScheduler"
         )
-
+        self.noise_scheduler = noise_scheduler
         self.use_tqdm = use_tqdm
 
         self.steps = noise_scheduler.steps
@@ -215,6 +215,7 @@ class DDIMSampler(torch.nn.Module):
             "steps must be a divisor of noise_scheduler.steps"
         )
 
+        self.noise_scheduler = noise_scheduler
         self.use_tqdm = use_tqdm
 
         self.steps = steps
@@ -259,6 +260,7 @@ class DDIMSampler(torch.nn.Module):
         x0_pred = (x - torch.sqrt(1.0 - alphas_cumprod_t) * pred_noise) / torch.sqrt(
             alphas_cumprod_t
         )
+        x0_pred = x0_pred.clamp(-1.0, 1.0)
 
         if t != 0:
             real_t_prev = self.steps_list[t - 1]
