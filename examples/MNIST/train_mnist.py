@@ -307,9 +307,8 @@ if __name__ == "__main__":
         )
     else:
         optimizer = torch.optim.Adam(
-            list(diffusion.parameters()) + list(vae.decoder.parameters())
-            if args.finetune_VAE
-            else [],
+            list(diffusion.parameters())
+            + list(vae.decoder.parameters() if args.finetune_VAE else []),
             lr=args.diffusion_lr,
         )
 
