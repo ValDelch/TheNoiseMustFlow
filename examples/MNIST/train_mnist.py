@@ -25,6 +25,7 @@ from MNIST import MNIST
 
 from TheNoiseMustFlow.core.models import VAE, Diffusion
 from TheNoiseMustFlow.core.schedulers import NoiseScheduler
+from TheNoiseMustFlow.core.samplers import DDIMSampler
 from TheNoiseMustFlow.trainer.custom_lr_schedulers import CosineLRScheduler
 from TheNoiseMustFlow.trainer.losses import VAE_loss, snr_weighted_mse_loss, mse_loss
 from TheNoiseMustFlow.trainer.train import train_vae, train_diffusion
@@ -112,7 +113,7 @@ if __name__ == "__main__":
 
     # Optimizer parameters for VAE
     parser.add_argument(
-        "--vae_epochs", type=int, default=30, help="Number of training epochs"
+        "--vae_epochs", type=int, default=10, help="Number of training epochs"
     )
     parser.add_argument("--vae_lr", type=float, default=1e-4, help="Learning rate")
     parser.add_argument(
@@ -125,11 +126,16 @@ if __name__ == "__main__":
     parser.add_argument(
         "--vae_warmup_steps",
         type=int,
-        default=10,
+        default=5,
         help="Number of warmup steps for the scheduler",
     )
 
     # Optimizer parameters for diffusion model
+    parser.add_argument(
+        "--finetune_VAE",
+        action="store_true",
+        help="Flag to indicate whether to fine-tune the VAE during diffusion training",
+    )
     parser.add_argument(
         "--diffusion_epochs",
         type=int,
@@ -275,6 +281,13 @@ if __name__ == "__main__":
         steps=args.steps, betas=args.betas, schedule=args.schedule, seed=args.seed
     ).to(args.device)
 
+    if args.finetune_VAE:
+        sampler = DDIMSampler(
+            noise_scheduler=noise_scheduler, steps=50, eta=0.0, use_tqdm=False
+        ).to(args.device)
+    else:
+        sampler = None
+
     # 5. Train the diffusion model for a specified number of epochs
     # Check for existing checkpoints
     if os.path.exists(os.path.join(checkpoint_folder, "diffusion", "diffusion.pth")):
@@ -293,7 +306,12 @@ if __name__ == "__main__":
             f"[INFO] Resumed diffusion training from epoch {start_epoch} with best loss {best_loss:.4f}.\n"
         )
     else:
-        optimizer = torch.optim.Adam(diffusion.parameters(), lr=args.diffusion_lr)
+        optimizer = torch.optim.Adam(
+            list(diffusion.parameters()) + list(vae.decoder.parameters())
+            if args.finetune_VAE
+            else [],
+            lr=args.diffusion_lr,
+        )
 
         if args.diffusion_warmup == "cosine":
             scheduler = CosineLRScheduler(
@@ -311,6 +329,14 @@ if __name__ == "__main__":
                 "kwargs": {"gamma": 5.0, "reduction": "sum"},
             }
         ]
+        sampler_losses = [
+            {
+                "loss_name": "mse_loss",
+                "callable": mse_loss,
+                "weight": 1e3,
+                "kwargs": {"reduction": "mean"},
+            }
+        ]
 
         diffusion = train_diffusion(
             diffusion,
@@ -321,6 +347,8 @@ if __name__ == "__main__":
             losses,
             epochs=args.diffusion_epochs,
             vae=vae,
+            sampler=sampler,
+            sampler_losses=sampler_losses,
             scheduler=scheduler,
             checkpoint_folder=checkpoint_folder,
             use_tqdm=args.use_tqdm,

@@ -17,6 +17,7 @@ while DDIM can sample with fewer steps, allowing for faster generation of sample
 
 from __future__ import annotations
 from typing import Union, Callable, Optional
+from contextlib import nullcontext
 
 from tqdm import tqdm
 
@@ -114,6 +115,7 @@ class DDPMSampler(torch.nn.Module):
         func_inputs: dict = {},
         return_intermediates: bool = False,
         return_step: int = 50,
+        training: bool = False,
     ) -> Union[torch.Tensor, list[torch.Tensor]]:
         """
         sample
@@ -131,6 +133,7 @@ class DDPMSampler(torch.nn.Module):
             return_intermediates: If True, returns intermediate samples at each step.
             return_step: The step at which to return the intermediate sample if return_intermediates is True.
                 Otherwise, it is ignored.
+            training: If True, the sampler is in training mode.
 
         Returns:
             The final sample tensor after sampling from x_{t} to x_{0}.
@@ -144,7 +147,7 @@ class DDPMSampler(torch.nn.Module):
         intermediates = []
         pbar = tqdm(range(self.steps), desc="Sampling", disable=not self.use_tqdm)
         for step in reversed(pbar):  # steps-1, ..., 1, 0
-            with torch.no_grad():
+            with torch.no_grad() if not training else nullcontext():
                 pred_noise = pred_noise_func(
                     x, torch.tensor([step], device=x.device), **func_inputs
                 )
@@ -288,6 +291,7 @@ class DDIMSampler(torch.nn.Module):
         func_inputs: dict = {},
         return_intermediates: bool = False,
         return_step: int = 1,
+        training: bool = False,
     ) -> Union[torch.Tensor, list[torch.Tensor]]:
         """
         sample
@@ -303,6 +307,7 @@ class DDIMSampler(torch.nn.Module):
             return_intermediates: If True, returns intermediate samples at each step.
             return_step: The step at which to return the intermediate sample if return_intermediates is True.
                 Otherwise, it is ignored.
+            training: If True, the sampler is in training mode.
 
         Returns:
             The final sample tensor after sampling from x_{t} to x_{0}.
@@ -316,7 +321,7 @@ class DDIMSampler(torch.nn.Module):
         intermediates = []
         pbar = tqdm(range(self.steps), desc="Sampling", disable=not self.use_tqdm)
         for step in reversed(pbar):  # steps-1, ..., 1, 0
-            with torch.no_grad():
+            with torch.no_grad() if not training else nullcontext():
                 pred_noise = pred_noise_func(
                     x,
                     torch.tensor([self.steps_list[step]], device=x.device),

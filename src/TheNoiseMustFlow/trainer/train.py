@@ -6,7 +6,6 @@ This module implements the training loops for the VAE and diffusion model.
 
 from __future__ import annotations
 from typing import Optional, Union
-from contextlib import nullcontext
 
 import os
 from tqdm import tqdm
@@ -433,6 +432,8 @@ def train_diffusion(
     losses: list[dict],
     epochs: int,
     vae: Optional[VAE] = None,
+    sampler: Optional[Union[DDPMSampler, DDIMSampler]] = None,
+    sampler_losses: Optional[list[dict]] = None,
     scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     checkpoint_folder: str = "./checkpoints",
     use_tqdm: bool = False,
@@ -442,7 +443,7 @@ def train_diffusion(
     mixed_precision: bool = False,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
     return_model: bool = False,
-) -> Optional[Diffusion]:
+) -> Optional[Union[Diffusion], tuple[Diffusion, VAE]]:
     """
     Train the diffusion model.
 
@@ -460,6 +461,9 @@ def train_diffusion(
         epochs: Number of training epochs.
         vae: The VAE model used for encoding and decoding images.
             If None, dataloaders are expected to return latent vectors directly.
+        sampler: Optional sampler for training on the whole reconstructed image.
+        sampler_losses: List of dictionaries for the sampler losses.
+            Same structure as `losses`, but used only if `sampler` is not None.
         scheduler: Learning rate scheduler for the optimizer.
         checkpoint_folder: Folder to save the model checkpoints.
         use_tqdm: Whether to use tqdm for progress bars.
@@ -518,9 +522,15 @@ def train_diffusion(
         #
 
         diffusion.train()
-        vae.eval() if vae is not None else None
+        if vae is not None:
+            vae.encoder.eval()
+            vae.decoder.eval() if sampler is None else vae.decoder.train()
 
         train_losses = {loss_fn["loss_name"]: 0.0 for loss_fn in losses}
+        if sampler is not None:
+            train_losses.update(
+                {"sampler_" + loss_fn["loss_name"]: 0.0 for loss_fn in sampler_losses}
+            )
 
         pbar = tqdm(
             train_dataloader,
@@ -536,6 +546,17 @@ def train_diffusion(
                 _loss = step_diffusion(
                     diffusion, batch, noise_scheduler, losses, generator, device, vae
                 )
+                if sampler is not None:
+                    _sampler_loss = rec_diffusion(
+                        diffusion,
+                        batch,
+                        sampler,
+                        sampler_losses,
+                        generator,
+                        device,
+                        vae,
+                    )
+                    _loss.update({"sampler_" + k: v for k, v in _sampler_loss.items()})
 
             # Update the training losses
             for k, v in _loss.items():
@@ -560,6 +581,10 @@ def train_diffusion(
         vae.eval() if vae is not None else None
 
         test_losses = {loss_fn["loss_name"]: 0.0 for loss_fn in losses}
+        if sampler is not None:
+            test_losses.update(
+                {"sampler_" + loss_fn["loss_name"]: 0.0 for loss_fn in sampler_losses}
+            )
 
         pbar = tqdm(
             test_dataloader,
@@ -573,6 +598,17 @@ def train_diffusion(
                 _loss = step_diffusion(
                     diffusion, batch, noise_scheduler, losses, generator, device, vae
                 )
+                if sampler is not None:
+                    _sampler_loss = rec_diffusion(
+                        diffusion,
+                        batch,
+                        sampler,
+                        sampler_losses,
+                        generator,
+                        device,
+                        vae,
+                    )
+                    _loss.update({"sampler_" + k: v for k, v in _sampler_loss.items()})
 
                 # Update the testing losses
                 for k, v in _loss.items():
@@ -611,6 +647,13 @@ def train_diffusion(
                 },
                 os.path.join(checkpoint_folder, "diffusion", "diffusion.pth"),
             )
+            if sampler is not None:
+                torch.save(
+                    {
+                        "model_state_dict": vae.state_dict(),
+                    },
+                    os.path.join(checkpoint_folder, "diffusion", "finetuned_vae.pth"),
+                )
             print(f"[INFO] New best loss: {best_loss:.4f}. Model saved.\n")
         else:
             print(
@@ -780,6 +823,8 @@ def train_diffusion(
                 plt.close(fig)
 
     if return_model:
+        if sampler is not None and vae is not None:
+            return (diffusion, vae)
         return diffusion
 
 
@@ -791,7 +836,6 @@ def step_diffusion(
     generator: torch.Generator,
     device: str,
     vae: Optional[VAE] = None,
-    sampler: Optional[Union[DDPMSampler, DDIMSampler]] = None,
 ) -> Union[dict[str, torch.Tensor], tuple[dict[str, torch.Tensor], torch.Tensor]]:
     """
     Perform a single step for the diffusion model.
@@ -810,7 +854,6 @@ def step_diffusion(
         device: Device to use for training (e.g., 'cuda' or 'cpu').
         vae: The VAE model used for encoding and decoding images.
             If None, dataloaders are expected to return latent vectors directly.
-        sampler: Optional sampler for re-generating images from predicted noise.
 
     Returns:
         A dictionary containing the computed losses for the batch.
@@ -847,18 +890,70 @@ def step_diffusion(
     # Loss computations
     loss_fn_inputs = {"x": noise, "x_hat": pred_noise, "snr": snr}
 
-    # If sampler is provided, we will also compute the reconstructed images
-    if sampler is not None:
-        denoised_latent = torch.empty_like(noisy_images)
-        for i, step in enumerate(t):
-            denoised_latent[i] = sampler.sample_prev_step(
-                noisy_images[i],
-                min(
-                    sampler.steps - 1,
-                    int((step // noise_scheduler.steps) * sampler.steps),
-                ),
-                pred_noise[i],
-            )
-        rec_images = vae.decoder(denoised_latent, rescale=True)
-        return compute_loss(loss_fn_inputs, losses), rec_images
     return compute_loss(loss_fn_inputs, losses)
+
+
+def rec_diffusion(
+    diffusion: Diffusion,
+    batch: dict,
+    sampler: Union[DDPMSampler, DDIMSampler],
+    sampler_losses: Optional[list[dict]],
+    generator: torch.Generator,
+    device: str,
+    vae: Optional[VAE] = None,
+) -> dict[str, torch.Tensor]:
+    """
+    Reconstruct the images based on the context starting from random noise.
+    It is useful to constrain the diffusion model to generate specific images
+    based on the context only.
+
+    Args:
+        diffusion: The diffusion model to use for reconstruction.
+        batch: A dictionary containing the batch data.
+            Expected keys are 'context' for additional context.
+        sampler: Sampler to use for the diffusion process.
+        sampler_losses: List of dictionaries for the sampler losses.
+        generator: Random number generator for reproducibility.
+        device: Device to use for training (e.g., 'cuda' or 'cpu').
+        vae: The VAE model used for encoding and decoding images.
+            If None, dataloaders are expected to return latent vectors directly.
+
+    Returns:
+        The MSE loss between the reconstructed images and the original images.
+    """
+    context = batch["context"].to(device)
+    if vae is not None:
+        images = batch["image"].to(device)
+        noise = torch.randn(
+            images.size(0), *vae.latent_shape, device=device, generator=generator
+        )
+        with torch.no_grad():
+            latent_images = vae(
+                images, noise, return_stats=False, rescale=True, return_rec=False
+            )
+    else:
+        latent_images = batch["image"].to(device)
+
+    # Sample the initial noise
+    x = torch.randn(latent_images.size(), device=device, generator=generator)
+    rec_latent_images = sampler.sample(
+        x,
+        pred_noise_func=diffusion,
+        func_inputs={"context": context},
+        return_intermediates=False,
+        training=True,
+    )
+
+    if vae is not None:
+        rec_images = vae.decoder(rec_latent_images, rescale=True)
+        loss_fn_inputs = {
+            "x": images,
+            "x_hat": rec_images,
+        }
+    else:
+        loss_fn_inputs = {
+            "x": latent_images,
+            "x_hat": rec_latent_images,
+        }
+
+    return compute_loss(loss_fn_inputs, sampler_losses)
