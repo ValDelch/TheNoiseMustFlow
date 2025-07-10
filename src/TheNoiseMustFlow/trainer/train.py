@@ -1045,7 +1045,9 @@ def rec_diffusion(
         rec_images = vae.decoder(rec_latent_images, rescale=rescale)
         loss_fn_inputs = {
             "x": images,
+            "targets": images,
             "x_hat": rec_images,
+            "logits": rec_images,
         }
     else:
         loss_fn_inputs = {
