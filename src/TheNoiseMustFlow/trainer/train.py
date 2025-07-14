@@ -2,6 +2,8 @@
 train.py
 
 This module implements the training loops for the VAE and diffusion model.
+
+# TODO: Add some flexibility in the vae and ddpm steps to support DDP (.module.)
 """
 
 from __future__ import annotations
