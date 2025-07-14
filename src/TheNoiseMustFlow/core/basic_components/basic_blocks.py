@@ -199,8 +199,12 @@ class BasicAttentionBlock(nn.Module):
             "Channels must be divisible by groups for GroupNorm"
         )
         assert channels % num_heads == 0, (
-            "Channels must be divisible by num_heads for SelfAttention"
+            "channels must be divisible by num_heads for self attention"
         )
+        if d_context:
+            assert d_context % num_heads == 0, (
+                "d_context must be divisible by num_heads for cross attention"
+            )
 
         # Input block
         self.group_norm = nn.GroupNorm(num_groups=groups, num_channels=channels)
