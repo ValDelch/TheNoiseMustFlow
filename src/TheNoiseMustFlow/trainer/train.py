@@ -2,8 +2,6 @@
 train.py
 
 This module implements the training loops for the VAE and diffusion model.
-
-# TODO: Add some flexibility in the vae and ddpm steps to support DDP (.module.)
 """
 
 from __future__ import annotations
@@ -244,6 +242,10 @@ def train_vae(
     if seed is not None:
         generator.manual_seed(seed)
 
+    latent_shape = getattr(vae, "latent_shape", None)
+    if latent_shape is None and hasattr(vae, "module"):
+        latent_shape = getattr(vae.module, "latent_shape", None)
+
     scaler = GradScaler() if (device.startswith("cuda") and mixed_precision) else None
     for epoch in range(start_epoch, epochs):
         #
@@ -354,7 +356,7 @@ def train_vae(
             batch = next(iter(test_dataloader))
             images = batch["image"].to(device)
             noise = torch.randn(
-                images.size(0), *vae.latent_shape, device=device, generator=generator
+                images.size(0), *latent_shape, device=device, generator=generator
             )
             _, rec_images = vae(
                 images, noise, return_stats=False, rescale=False, return_rec=True
@@ -412,9 +414,14 @@ def step_vae(
     """
     images = batch["image"].to(device)
 
+    # For DDP compatibility, check if vae is wrapped in a module
+    latent_shape = getattr(vae, "latent_shape", None)
+    if latent_shape is None and hasattr(vae, "module"):
+        latent_shape = getattr(vae.module, "latent_shape", None)
+
     # Forward pass
     noise = torch.randn(
-        images.size(0), *vae.latent_shape, device=device, generator=generator
+        images.size(0), *latent_shape, device=device, generator=generator
     )
     _, stats, rec_images = vae(
         images, noise, return_stats=True, rescale=False, return_rec=True
@@ -529,6 +536,11 @@ def train_diffusion(
     if seed is not None:
         generator.manual_seed(seed)
 
+    # For DDP compatibility, check if vae is wrapped in a module
+    latent_shape = getattr(vae, "latent_shape", None)
+    if latent_shape is None and hasattr(vae, "module"):
+        latent_shape = getattr(vae.module, "latent_shape", None)
+
     scaler = GradScaler() if (device.startswith("cuda") and mixed_precision) else None
     for epoch in range(start_epoch, epochs):
         #
@@ -537,8 +549,12 @@ def train_diffusion(
 
         diffusion.train()
         if vae is not None:
-            vae.encoder.eval()
-            vae.decoder.eval() if sampler is None else vae.decoder.train()
+            if not hasattr(vae, "module"):
+                vae.encoder.eval()
+                vae.decoder.eval() if sampler is None else vae.decoder.train()
+            else:
+                vae.module.encoder.eval()
+                vae.module.decoder.eval() if sampler is None else vae.module.decoder.train()
 
         train_losses = {loss_fn["loss_name"]: 0.0 for loss_fn in losses}
         if sampler is not None:
@@ -703,14 +719,13 @@ def train_diffusion(
 
         with torch.no_grad():
             # Noise prediction
-
             batch = next(iter(test_dataloader))
             contexts = batch["context"].to(device)
             if vae is not None:
                 images = batch["image"].to(device)
                 noise = torch.randn(
                     images.size(0),
-                    *vae.latent_shape,
+                    *latent_shape,
                     device=device,
                     generator=generator,
                 )
@@ -819,7 +834,7 @@ def train_diffusion(
             sampler = DDPMSampler(noise_scheduler=noise_scheduler, use_tqdm=False).to(
                 device
             )
-            x = torch.randn((1, *vae.latent_shape), device=device) * scaling_factor
+            x = torch.randn((1, *latent_shape), device=device) * scaling_factor
 
             sampled_latent = sampler.sample(
                 x,
@@ -829,9 +844,14 @@ def train_diffusion(
                 return_step=noise_scheduler.steps // 100,
             )
             DDPM_latent_std = sampled_latent[-1].std().item()
-            generated_images = vae.decoder(
-                torch.cat(sampled_latent, dim=0), rescale=rescale
-            )
+            if hasattr(vae, "decoder"):
+                generated_images = vae.decoder(
+                    torch.cat(sampled_latent, dim=0), rescale=rescale
+                )
+            else:
+                generated_images = vae.module.decoder(
+                    torch.cat(sampled_latent, dim=0), rescale=rescale
+                )
 
             fig, axes = plt.subplots(1, 10, figsize=(10 * 5, 5))
             for i in range(10):
@@ -852,7 +872,7 @@ def train_diffusion(
             sampler = DDIMSampler(
                 noise_scheduler=noise_scheduler, steps=50, eta=0.05, use_tqdm=False
             ).to(device)
-            x = torch.randn((1, *vae.latent_shape), device=device) * scaling_factor
+            x = torch.randn((1, *latent_shape), device=device) * scaling_factor
 
             sampled_latent = sampler.sample(
                 x,
@@ -862,9 +882,14 @@ def train_diffusion(
                 return_step=sampler.steps // 10,
             )
             DDIM_latent_std = sampled_latent[-1].std().item()
-            generated_images = vae.decoder(
-                torch.cat(sampled_latent, dim=0), rescale=rescale
-            )
+            if hasattr(vae, "decoder"):
+                generated_images = vae.decoder(
+                    torch.cat(sampled_latent, dim=0), rescale=rescale
+                )
+            else:
+                generated_images = vae.module.decoder(
+                    torch.cat(sampled_latent, dim=0), rescale=rescale
+                )
 
             fig, axes = plt.subplots(1, 10, figsize=(10 * 5, 5))
             for i in range(10):
@@ -928,10 +953,16 @@ def step_diffusion(
         A dictionary containing the computed losses for the batch.
     """
     contexts = batch["context"].to(device)
+
     if vae is not None:
+        # For DDP compatibility, check if vae is wrapped in a module
+        latent_shape = getattr(vae, "latent_shape", None)
+        if latent_shape is None and hasattr(vae, "module"):
+            latent_shape = getattr(vae.module, "latent_shape", None)
+
         images = batch["image"].to(device)
         noise = torch.randn(
-            images.size(0), *vae.latent_shape, device=device, generator=generator
+            images.size(0), *latent_shape, device=device, generator=generator
         )
         with torch.no_grad():
             latent_images = vae(
@@ -1001,9 +1032,14 @@ def rec_diffusion(
     """
     context = batch["context"].to(device)
     if vae is not None:
+        # For DDP compatibility, check if vae is wrapped in a module
+        latent_shape = getattr(vae, "latent_shape", None)
+        if latent_shape is None and hasattr(vae, "module"):
+            latent_shape = getattr(vae.module, "latent_shape", None)
+
         images = batch["image"].to(device)
         noise = torch.randn(
-            images.size(0), *vae.latent_shape, device=device, generator=generator
+            images.size(0), *latent_shape, device=device, generator=generator
         )
         with torch.no_grad():
             latent_images = vae(
@@ -1044,7 +1080,12 @@ def rec_diffusion(
     )
 
     if vae is not None:
-        rec_images = vae.decoder(rec_latent_images, rescale=rescale)
+        # For DDP compatibility, check if vae is wrapped in a module
+        if hasattr(vae, "decoder"):
+            rec_images = vae.decoder(rec_latent_images, rescale=rescale)
+        else:
+            rec_images = vae.module.decoder(rec_latent_images, rescale=rescale)
+
         loss_fn_inputs = {
             "x": images,
             "targets": images,
