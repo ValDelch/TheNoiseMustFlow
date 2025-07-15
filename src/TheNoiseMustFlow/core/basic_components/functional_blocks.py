@@ -78,14 +78,14 @@ class SelfAttention(nn.Module):
         # Project input to query, key, value
         q, k, v = self.qkv_proj(x).chunk(3, dim=-1)  # (batch_size, seq_len, 3 * dim)
 
-        q = q.reshape(*interm_shape).transpose(
-            1, 2
+        q = (
+            q.reshape(*interm_shape).transpose(1, 2).contiguous()
         )  # (batch_size, num_heads, seq_len, head_dim)
-        k = k.reshape(*interm_shape).transpose(
-            1, 2
+        k = (
+            k.reshape(*interm_shape).transpose(1, 2).contiguous()
         )  # (batch_size, num_heads, seq_len, head_dim)
-        v = v.reshape(*interm_shape).transpose(
-            1, 2
+        v = (
+            v.reshape(*interm_shape).transpose(1, 2).contiguous()
         )  # (batch_size, num_heads, seq_len, head_dim)
 
         # Calculate attention scores
@@ -133,7 +133,9 @@ class SelfAttention(nn.Module):
         output = torch.matmul(
             attn_weights, v
         )  # (batch_size, num_heads, seq_len, head_dim)
-        output = output.transpose(1, 2).reshape(batch_size, seq_len, self.dim)
+        output = (
+            output.transpose(1, 2).contiguous().reshape(batch_size, seq_len, self.dim)
+        )
 
         if return_attn:
             return self.out_proj(output), attn_weights.to(dtype=torch.float32)
@@ -221,14 +223,14 @@ class CrossAttention(nn.Module):
         k = self.k_proj(cross_x)
         v = self.v_proj(cross_x)
 
-        q = q.reshape(*interm_shape).transpose(
-            1, 2
+        q = (
+            q.reshape(*interm_shape).transpose(1, 2).contiguous()
         )  # (batch_size, num_heads, seq_len, head_dim)
-        k = k.reshape(*interm_shape).transpose(
-            1, 2
+        k = (
+            k.reshape(*interm_shape).transpose(1, 2).contiguous()
         )  # (batch_size, num_heads, cross_seq_len, head_dim)
-        v = v.reshape(*interm_shape).transpose(
-            1, 2
+        v = (
+            v.reshape(*interm_shape).transpose(1, 2).contiguous()
         )  # (batch_size, num_heads, cross_seq_len, head_dim)
 
         # Calculate attention scores
@@ -288,7 +290,9 @@ class CrossAttention(nn.Module):
         output = torch.matmul(
             attn_weights, v
         )  # (batch_size, num_heads, seq_len, head_dim)
-        output = output.transpose(1, 2).reshape(batch_size, seq_len, self.dim)
+        output = (
+            output.transpose(1, 2).contiguous().reshape(batch_size, seq_len, self.dim)
+        )
 
         if return_attn:
             return self.out_proj(output), attn_weights.to(dtype=torch.float32)

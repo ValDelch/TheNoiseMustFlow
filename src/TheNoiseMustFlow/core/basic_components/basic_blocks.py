@@ -302,9 +302,9 @@ class BasicAttentionBlock(nn.Module):
         x = self.conv_input(x)
 
         n, c, h, w = x.shape
-        x = x.view(n, c, h * w).permute(
-            0, 2, 1
-        )  # (batch_size, height * width, channels)
+        x = (
+            x.view(n, c, h * w).permute(0, 2, 1).contiguous()
+        )  # Reshape to (batch_size, height * width, channels)
 
         # Self-attention block
         short_term_residual = x
@@ -326,7 +326,7 @@ class BasicAttentionBlock(nn.Module):
         x += short_term_residual
 
         # Reshape back to (batch_size, channels, height, width)
-        x = x.transpose(-1, -2).view(n, c, h, w)
+        x = x.transpose(-1, -2).contiguous().view(n, c, h, w)
 
         return self.dropout(self.conv_output(x) + long_term_residual)
 
