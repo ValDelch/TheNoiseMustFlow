@@ -928,6 +928,7 @@ def step_diffusion(
     generator: torch.Generator,
     device: str,
     vae: Optional[VAE] = None,
+    source_image: Optional[torch.Tensor] = None,
 ) -> Union[dict[str, torch.Tensor], tuple[dict[str, torch.Tensor], torch.Tensor]]:
     """
     Perform a single step for the diffusion model.
@@ -948,6 +949,8 @@ def step_diffusion(
         device: Device to use for training (e.g., 'cuda' or 'cpu').
         vae: The VAE model used for encoding and decoding images.
             If None, dataloaders are expected to return latent vectors directly.
+        source_image: Optional source image for reconstruction. If provided, the denoising process
+            will assume starting from this image instead of random noise.
 
     Returns:
         A dictionary containing the computed losses for the batch.
@@ -971,6 +974,33 @@ def step_diffusion(
     else:
         latent_images = batch["image"].to(device)
 
+    if source_image is not None:
+        if vae is not None:
+            source_image = source_image.to(device)
+            noise = torch.randn(
+                source_image.size(0), *latent_shape, device=device, generator=generator
+            )
+            with torch.no_grad():
+                init_latent = vae(
+                    source_image,
+                    noise,
+                    return_stats=False,
+                    rescale=rescale,
+                    return_rec=False,
+                )
+        else:
+            init_latent = source_image.to(device)
+
+        noise = (latent_images - init_latent) * scaling_factor + torch.randn(
+            latent_images.size(), device=device, generator=generator
+        ) * 0.01
+
+    else:
+        noise = (
+            torch.randn(latent_images.size(), device=device, generator=generator)
+            * scaling_factor
+        )
+
     # Sample the time steps and add the noise
     t = torch.randint(
         0,
@@ -980,11 +1010,6 @@ def step_diffusion(
         generator=generator,
     )
     snr = noise_scheduler.compute_snr(t)
-
-    noise = (
-        torch.randn(latent_images.size(), device=device, generator=generator)
-        * scaling_factor
-    )
 
     noisy_images = noise_scheduler.add_noise_cumulative(latent_images, t, noise)
 
