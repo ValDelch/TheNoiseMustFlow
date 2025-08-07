@@ -36,7 +36,7 @@ class BasicResidualBlock(nn.Module):
         out_channels: int,
         kernel_size: int = 3,
         groups: int = 32,
-        activation: Optional[Type[nn.Module]] = None,
+        activation: Optional[nn.Module] = None,
         padding: Union[int, str] = "same",
         use_bias: bool = True,
         padding_mode: str = "zeros",
